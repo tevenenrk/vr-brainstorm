@@ -1,4 +1,10 @@
-# Stół Artyleryjski VR (Meta Quest 3 / 3S)
+# Stół Artyleryjski VR + Makieta Katastrof (Meta Quest 3 / 3S)
+
+Dwa tryby na lewitującej makiecie:
+- **Artyleria** (`index.html`): bronisz wioski przed piechotą i czołgami.
+- **Makieta katastrof** (`disasters.html`): kwadratowy miniaturowy świat, na którym wywołujesz katastrofy.
+
+Między trybami przełączasz się przyciskiem na stronie albo w menu w VR.
 
 Symulator WebXR: przed Tobą lewituje prostokątna platforma, a na niej miniaturowy kawałek
 świata 1 km × 4 km (skala 1:2000, czyli 0,5 m × 2 m). Są tam pagórki, lasy, jezioro, stawy
@@ -71,7 +77,52 @@ Tryby:
 - **Wejdź w VR:** wirtualny pokój.
 - **Mixed Reality:** passthrough, czyli platforma unosi się w Twoim prawdziwym pokoju.
 
-## Podgląd na komputerze
+## Tryb: Makieta katastrof
+
+Kwadratowy świat 2 × 2 km (0,8 m × 0,8 m na stole). Są w nim:
+- miasteczko z siatką ulic, wieżowcami, blokami, domkami i kościołem;
+- plaża z parasolami, hotelami i molo, przylądek z latarnią i kawałek morza;
+- ośnieżone góry ze zbiornikiem i **tamą**;
+- **wulkan**;
+- pustynia z wydmami i mesami, pola z farmami, lasy;
+- rzeka do morza z mostami i sieć dróg.
+
+Po ulicach i plaży chodzi ~430 ludzików, a po drogach jeździ 80 samochodów. Woda i lawa to prawdziwa
+symulacja przepływu po terenie, więc powódź, fala z tamy i tsunami płyną dolinami i ulicami,
+a lawa spływa zboczem.
+
+| Katastrofa | Jak działa |
+|---|---|
+| 🎯 **Lawina** | Śnieg zsuwa się z gór, zasypuje drzewa, drogi i ludzi. Zostawia jęzor śniegu. |
+| **Powódź** | Ulewa, wezbrana rzeka i podnoszący się poziom morza zalewają niżej położone tereny. |
+| 🎯 **Trzęsienie ziemi** | Makieta się trzęsie, pękają szczeliny, walą się budynki, schodzą osuwiska. Blisko tamy może ją urwać, a pod morzem wywołuje tsunami. |
+| 🎯 **Bomba atomowa** | Błysk, grzyb, fala uderzeniowa, lej, wywołane pożary. |
+| **Tsunami** | Morze się cofa, potem nadchodzi wysoka fala. Zalewa plażę i miasto, porywa ludzi i auta. |
+| 🎯 **Pożar lasu** | Ogień przenosi się z drzewa na drzewo z wiatrem z zachodu i zapala domy. |
+| **Urwanie tamy** | Tama pęka, a fala ze zbiornika rusza doliną przez miasto do morza. |
+| **Superwulkan** | Wstrząsy i puchnięcie stożka, potem erupcja. Jest kolumna popiołu z błyskawicami, bomby wulkaniczne, spływy piroklastyczne, lawa, opad popiołu i ciemne niebo. |
+
+🎯 oznacza, że wybierasz katastrofę w menu, potem wskazujesz miejsce promieniem i naciskasz spust.
+Pozostałe startują od razu. Katastrofy mogą trwać jednocześnie.
+
+Sterowanie w VR:
+- spust: uruchom (albo kliknij w menu);
+- **B**: menu katastrof;
+- **A**: pauza;
+- prawa gałka ↑/↓: tempo czasu 0,25×–4×;
+- **Y**: odbuduj świat;
+- **X**: makieta przed siebie;
+- grip: chwyć i skaluj makietę, tak jak w artylerii.
+
+Na komputerze:
+- `1`–`8`: wybór katastrofy;
+- klik: uruchom w miejscu kursora;
+- `Spacja`: pauza;
+- `+`/`-`: tempo;
+- `R`: odbuduj świat;
+- `O`: menu.
+
+## Podgląd na komputerze (artyleria)
 
 - klik / `Spacja`: salwa;
 - 2× klik: ogień ciągły (`C` przełącza);
@@ -115,3 +166,8 @@ Potem otwórz na Queście `http://localhost:8000` (localhost traktowany jest jak
 - `src/table.js`: chwytanie, obracanie i skalowanie platformy jedną albo dwiema rękami.
 - `src/hud.js`: panel na nadgarstku i menu opcji.
 - `src/main.js`: scena, sesja XR, kontrolery, sterowanie na komputerze i pętla gry.
+- `src/disasters/world.js`: świat makiety katastrof (teren, drogi, mosty, miasto, tama, drzewa).
+- `src/disasters/fluid.js`: symulacja wody i lawy (płytka woda, metoda „wirtualnych rur”).
+- `src/disasters/agents.js`: ludziki i samochody (ruch, ucieczka, porwanie przez wodę).
+- `src/disasters/scenarios.js`: skrypty katastrof i system pożarów.
+- `src/disasters/ui.js`, `src/disasters/main.js`: panel, menu i pętla trybu katastrof.

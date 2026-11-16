@@ -101,7 +101,7 @@ export class Hud extends CanvasPanel {
 // Menu opcji z przyciskami (klik promieniem lub myszą)
 export class Menu extends CanvasPanel {
   constructor() {
-    super(720, 1030, 0.2);
+    super(720, 1114, 0.2);
     this.buttons = [];
     this.hover = -1;
     this.mesh.visible = false;
@@ -157,7 +157,8 @@ export class Menu extends CanvasPanel {
     btn(34, y, 316, 66, 'Następna fala', 'wave', '#5a2a2a');
     btn(370, y, 316, 66, 'Nowa gra', 'new', '#5a3a2a'); y += 84;
     btn(34, y, 316, 66, 'Stół przed siebie', 'place');
-    btn(370, y, 316, 66, 'Zamknij menu', 'close'); y += 104;
+    btn(370, y, 316, 66, 'Zamknij menu', 'close'); y += 84;
+    btn(34, y, 652, 66, 'Tryb: Makieta katastrof →', 'mode', '#5a3a1a'); y += 104;
 
     c.font = '22px system-ui, sans-serif'; c.fillStyle = '#9fb8a4';
     const help = [

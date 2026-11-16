@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 // Pula cząsteczek oparta o InstancedMesh (jedno wywołanie rysowania na pulę).
-class ParticlePool {
+export class ParticlePool {
   constructor(parent, material, capacity, detail = 1) {
     this.mesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, detail), material, capacity);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -64,12 +64,12 @@ class ParticlePool {
 const rnd = (a = 1) => (Math.random() * 2 - 1) * a;
 
 export class Effects {
-  constructor(parent, terrain) {
+  constructor(parent, terrain, cap = {}) {
     this.terrain = terrain;
     this.fire = new ParticlePool(parent, new THREE.MeshBasicMaterial({
       transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
-    }), 1100, 1);
-    this.smoke = new ParticlePool(parent, new THREE.MeshLambertMaterial({ flatShading: true }), 1000, 1);
+    }), cap.fire || 1100, 1);
+    this.smoke = new ParticlePool(parent, new THREE.MeshLambertMaterial({ flatShading: true }), cap.smoke || 1000, 1);
     this.ground = (x, z) => terrain.surfaceAt(x, z);
     this.smokers = [];
     this.fireZones = [];

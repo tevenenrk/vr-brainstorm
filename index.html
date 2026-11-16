@@ -19,7 +19,8 @@
       font: 600 15px system-ui, sans-serif; padding: 10px 14px; border-radius: 10px; border: 0;
       background: #7dffb0; color: #10301c; cursor: pointer;
     }
-    button.alt { background: #cfe8ff; color: #102233; }
+    button.alt, a.btn { background: #cfe8ff; color: #102233; }
+    a.btn { font: 600 15px system-ui, sans-serif; padding: 10px 14px; border-radius: 10px; text-decoration: none; }
     button:disabled { background: #39423c; color: #7d8c80; cursor: not-allowed; }
     #xr-note { color: #ffcf8a; min-height: 1em; }
     kbd { background: #2c3830; border-radius: 4px; padding: 1px 5px; font-size: 12px; }
@@ -48,6 +49,7 @@
       <button id="btn-vr">Wejdź w VR</button>
       <button id="btn-ar" class="alt">Mixed Reality</button>
       <button id="btn-menu" class="alt">Opcje</button>
+      <a class="btn alt" href="disasters.html">Katastrofy →</a>
     </div>
     <p id="xr-note"></p>
     <p><b>Na komputerze:</b> klik / <kbd>Spacja</kbd> — salwa, 2× klik — ogień ciągły,

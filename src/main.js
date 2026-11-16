@@ -207,6 +207,7 @@ function menuAction(act) {
     case 'new': newGame(); toggleMenu(false); break;
     case 'place': placeTable(); break;
     case 'close': toggleMenu(false); break;
+    case 'mode': location.href = 'disasters.html'; break;
     default: break;
   }
   saveOpts();
