@@ -1,6 +1,7 @@
 import * as THREE from 'three';
+import { DIFFICULTY_NAMES } from './config.js';
 
-// Panel rysowany na canvasie i wyświetlany jako tekstura (VR) lub HTML (desktop).
+// Panel rysowany na canvasie: tekstura w VR, element HTML na komputerze.
 export class CanvasPanel {
   constructor(w, h, widthMeters) {
     this.canvas = document.createElement('canvas');
@@ -15,6 +16,7 @@ export class CanvasPanel {
       new THREE.MeshBasicMaterial({ map: this.tex, transparent: true, toneMapped: false, depthWrite: false }),
     );
     this.mesh.renderOrder = 10;
+    this.last = '';
   }
 
   roundRect(x, y, w, h, r) {
@@ -23,93 +25,141 @@ export class CanvasPanel {
     c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
     c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
   }
+
+  background(stroke) {
+    const c = this.ctx, W = this.canvas.width, H = this.canvas.height;
+    c.clearRect(0, 0, W, H);
+    c.fillStyle = 'rgba(14,20,16,0.9)';
+    this.roundRect(4, 4, W - 8, H - 8, 26); c.fill();
+    c.strokeStyle = stroke; c.lineWidth = 3; c.stroke();
+  }
 }
 
 export class Hud extends CanvasPanel {
-  constructor() {
-    super(640, 470, 0.17);
-    this.last = '';
-  }
+  constructor() { super(640, 500, 0.17); }
 
   draw(s) {
     const key = JSON.stringify(s);
     if (key === this.last) return;
     this.last = key;
-    const c = this.ctx, W = this.canvas.width, H = this.canvas.height;
-    c.clearRect(0, 0, W, H);
-    c.fillStyle = 'rgba(14,20,16,0.86)';
-    this.roundRect(4, 4, W - 8, H - 8, 26); c.fill();
-    c.strokeStyle = 'rgba(160,220,170,0.6)'; c.lineWidth = 3; c.stroke();
-
+    const c = this.ctx, W = this.canvas.width;
+    this.background(s.continuous ? 'rgba(255,110,90,0.9)' : 'rgba(160,220,170,0.6)');
+    c.textAlign = 'left';
     c.fillStyle = '#d8f5dc'; c.font = 'bold 44px system-ui, sans-serif';
     c.fillText(`FALA ${s.wave}`, 30, 62);
-    c.textAlign = 'right';
-    c.fillStyle = '#ffb4a8';
+    c.textAlign = 'right'; c.fillStyle = '#ffb4a8';
     c.fillText(`☠ ${s.kills}`, W - 30, 62);
     c.textAlign = 'left';
 
-    c.font = '30px system-ui, sans-serif';
+    c.font = '30px system-ui, sans-serif'; c.fillStyle = '#b9d6bd';
+    c.fillText(`Wróg na mapie: ${s.alive}`, 30, 106);
+    c.fillStyle = s.homeAlive < s.homeTotal / 2 ? '#ff9a8a' : '#b9d6bd';
+    c.fillText(`Wioska: ${s.homeAlive} / ${s.homeTotal} domów`, 30, 144);
     c.fillStyle = '#b9d6bd';
-    c.fillText(`Wróg na mapie: ${s.alive}`, 30, 108);
-    c.fillText(`Przełamania: ${s.breaches} / ${s.maxBreaches}`, 30, 146);
-    c.fillText(`Tor: ${s.high ? 'STROMY (górny)' : 'PŁASKI (dolny)'}`, 30, 184);
+    c.fillText(`Kąt lufy: ${s.angle}°   ·   ${s.mode}`, 30, 182);
 
     // gotowość dział
-    c.fillText('Działa:', 30, 232);
+    const n = s.guns.length;
+    const bw = Math.min(100, (W - 60) / n - 8);
     s.guns.forEach((r, i) => {
-      const x = 150 + i * 110, y = 208, w = 92, h = 30;
-      c.fillStyle = 'rgba(255,255,255,0.12)'; c.fillRect(x, y, w, h);
+      const x = 30 + i * (bw + 8), y = 202, h = 28;
+      c.fillStyle = 'rgba(255,255,255,0.12)'; c.fillRect(x, y, bw, h);
       c.fillStyle = r >= 1 ? '#7dffb0' : '#e8a040';
-      c.fillRect(x, y, w * r, h);
+      c.fillRect(x, y, bw * r, h);
     });
 
-    // cel
-    c.font = 'bold 32px system-ui, sans-serif';
+    c.font = 'bold 30px system-ui, sans-serif';
     const colors = { ok: '#7dffb0', blocked: '#ffa53a', range: '#ff6a5a', none: '#8aa08e' };
     c.fillStyle = colors[s.status] || '#fff';
     const txt = {
       ok: `Cel: ${(s.dist / 1000).toFixed(2)} km · lot ${s.flight.toFixed(1)} s`,
-      blocked: 'TOR ZASŁONIĘTY — zmień tor (A)',
-      range: 'POZA ZASIĘGIEM',
+      blocked: 'TOR ZASŁONIĘTY — zmień kąt',
+      range: 'POZA ZASIĘGIEM — zmniejsz kąt',
       none: 'Wyceluj w teren na stole',
     }[s.status];
-    c.fillText(txt, 30, 290);
+    c.fillText(txt, 30, 272);
 
-    c.font = 'bold 34px system-ui, sans-serif';
+    if (s.continuous) {
+      c.fillStyle = '#ff7a64'; c.font = 'bold 32px system-ui, sans-serif';
+      c.fillText('● OGIEŃ CIĄGŁY (spust = stop)', 30, 318);
+    }
+    c.font = 'bold 32px system-ui, sans-serif';
     c.fillStyle = s.msgColor || '#ffe9a0';
-    if (s.msg) c.fillText(s.msg, 30, 346);
+    if (s.msg) c.fillText(s.msg, 30, 364);
 
-    c.font = '22px system-ui, sans-serif';
-    c.fillStyle = '#7f9c84';
-    c.fillText('Spust: ognia · Grip: chwyć stół · A: tor · B: pomoc', 30, 404);
-    c.fillText('X: przywróć stół · Y: nowa gra · lewa gałka: obrót/zoom', 30, 438);
+    c.font = '22px system-ui, sans-serif'; c.fillStyle = '#7f9c84';
+    c.fillText('Spust: salwa · 2× spust: ogień ciągły · B: menu', 30, 420);
+    c.fillText('Prawa gałka ↑↓ kąt · klik gałki: zablokuj cel', 30, 452);
+    c.fillText('Trzymaj A i przesuń: obszar ostrzału', 30, 484);
     this.tex.needsUpdate = true;
   }
 }
 
-export class HelpBoard extends CanvasPanel {
+// Menu opcji z przyciskami (klik promieniem lub myszą)
+export class Menu extends CanvasPanel {
   constructor() {
-    super(900, 560, 0.42);
-    const c = this.ctx, W = this.canvas.width, H = this.canvas.height;
-    c.fillStyle = 'rgba(16,22,18,0.9)';
-    this.roundRect(4, 4, W - 8, H - 8, 30); c.fill();
-    c.strokeStyle = '#b08d3c'; c.lineWidth = 5; c.stroke();
-    c.fillStyle = '#f0e2b8'; c.font = 'bold 54px system-ui, sans-serif';
-    c.fillText('BATERIA — stół dowodzenia', 40, 80);
-    c.font = '32px system-ui, sans-serif'; c.fillStyle = '#d8e8d8';
-    const lines = [
-      '🎯  Celuj promieniem z kontrolera w teren',
-      '🔫  Spust — salwa z gotowych dział',
-      '✊  Grip (jedna ręka) — przesuń i obróć stół',
-      '🙌  Grip obiema rękami — skaluj i obracaj',
-      '🅰  A — tor płaski / stromy (przez wzgórza)',
-      '🅱  B — pokaż / ukryj tę tablicę',
-      '❎  X — przywróć stół przed siebie',
-      '🔄  Y — nowa gra   ·   lewa gałka — obrót/zoom',
+    super(720, 940, 0.2);
+    this.buttons = [];
+    this.hover = -1;
+    this.mesh.visible = false;
+  }
+
+  hit(px, py) {
+    return this.buttons.findIndex((b) => px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h);
+  }
+
+  draw(o) {
+    const key = JSON.stringify([o, this.hover]);
+    if (key === this.last) return;
+    this.last = key;
+    const c = this.ctx, W = this.canvas.width;
+    this.background('#b08d3c');
+    this.buttons = [];
+    c.textAlign = 'left';
+    c.fillStyle = '#f0e2b8'; c.font = 'bold 46px system-ui, sans-serif';
+    c.fillText('OPCJE', 34, 66);
+
+    const btn = (x, y, w, h, label, act, accent) => {
+      const i = this.buttons.length;
+      this.buttons.push({ x, y, w, h, act });
+      c.fillStyle = this.hover === i ? '#7dffb0' : (accent || '#2f3f35');
+      this.roundRect(x, y, w, h, 14); c.fill();
+      c.fillStyle = this.hover === i ? '#10301c' : '#e6f3e8';
+      c.font = 'bold 30px system-ui, sans-serif'; c.textAlign = 'center';
+      c.fillText(label, x + w / 2, y + h / 2 + 11);
+      c.textAlign = 'left';
+    };
+    const row = (y, label, value, act) => {
+      c.fillStyle = '#c9dccc'; c.font = '30px system-ui, sans-serif';
+      c.fillText(label, 34, y + 40);
+      btn(390, y, 70, 58, '−', act + '-');
+      c.fillStyle = '#ffffff'; c.font = 'bold 32px system-ui, sans-serif'; c.textAlign = 'center';
+      c.fillText(value, 540, y + 41); c.textAlign = 'left';
+      btn(620, y, 70, 58, '+', act + '+');
+    };
+    let y = 100;
+    row(y, 'Liczba dział', String(o.guns), 'guns'); y += 76;
+    row(y, 'Czas ładowania', `${o.reload.toFixed(1)} s`, 'reload'); y += 76;
+    row(y, 'Kąt lufy', `${Math.round(o.angle)}°`, 'angle'); y += 76;
+    row(y, 'Szybkość pocisków', `${Math.round(o.speed * 100)}%`, 'speed'); y += 76;
+    row(y, 'Trudność', DIFFICULTY_NAMES[o.difficulty], 'diff'); y += 92;
+
+    btn(34, y, 316, 66, 'Nowa gra', 'new', '#5a3a2a');
+    btn(370, y, 316, 66, 'Stół przed siebie', 'place'); y += 84;
+    btn(34, y, 652, 66, 'Zamknij menu', 'close'); y += 104;
+
+    c.font = '22px system-ui, sans-serif'; c.fillStyle = '#9fb8a4';
+    const help = [
+      'Spust — salwa z gotowych dział',
+      '2× spust szybko — ogień ciągły (spust — stop)',
+      'Prawa gałka ↑↓ — kąt lufy (tor bardziej z góry)',
+      'Klik prawej gałki — zablokuj / odblokuj cel',
+      'Trzymaj A + przesuń — obszar ostrzału; A krótko — usuń',
+      'Grip — chwyć stół, oburącz — skaluj',
+      'Lewa gałka — obrót / zoom stołu',
+      'X — stół przed siebie · Y — nowa gra',
     ];
-    lines.forEach((l, i) => c.fillText(l, 40, 150 + i * 48));
-    c.fillStyle = '#ffb4a8'; c.font = 'bold 30px system-ui, sans-serif';
-    c.fillText('Nie pozwól wrogowi dojść do linii baterii!', 40, 535);
+    help.forEach((l, i) => c.fillText(l, 34, y + i * 31));
     this.tex.needsUpdate = true;
   }
 }

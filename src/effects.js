@@ -71,6 +71,7 @@ export class Effects {
     }), 500, 1);
     this.smoke = new ParticlePool(parent, new THREE.MeshLambertMaterial({ flatShading: true }), 1000, 1);
     this.ground = (x, z) => terrain.surfaceAt(x, z);
+    this.smokers = [];
   }
 
   explosion(p, inWater) {
@@ -134,8 +135,45 @@ export class Effects {
     });
   }
 
-  update(dt) { this.fire.update(dt); this.smoke.update(dt); }
-  clear() { this.fire.clear(); this.smoke.clear(); }
+  // źródło dymu (płonący dom, zniszczony most)
+  addSmoker(p, dur, fire = true) { this.smokers.push({ p: p.clone(), t: 0, dur, acc: 0, fire }); }
+
+  burst(p) {
+    for (let i = 0; i < 10; i++) {
+      this.fire.spawn({
+        p: p.clone().add(new THREE.Vector3(rnd(8), Math.random() * 10, rnd(8))),
+        v: new THREE.Vector3(rnd(15), 10 + Math.random() * 25, rnd(15)),
+        life: 0.4 + Math.random() * 0.4, s0: 6, s1: 16, c0: 0xffb060, c1: 0x000000, drag: 0.1,
+      });
+    }
+  }
+
+  update(dt) {
+    for (let i = this.smokers.length - 1; i >= 0; i--) {
+      const s = this.smokers[i];
+      s.t += dt; s.acc += dt;
+      if (s.t > s.dur) { this.smokers.splice(i, 1); continue; }
+      const k = 1 - s.t / s.dur;
+      if (s.acc > 0.14) {
+        s.acc = 0;
+        this.smoke.spawn({
+          p: s.p.clone().add(new THREE.Vector3(rnd(5), 4, rnd(5))),
+          v: new THREE.Vector3(rnd(3) + 4, 14 + Math.random() * 10, rnd(3)),
+          life: 3 + Math.random() * 2, s0: 3, s1: 9 + 8 * k, c0: 0x2a2624, c1: 0x8d8a86, drag: 0.6,
+        });
+        if (s.fire && k > 0.4) {
+          this.fire.spawn({
+            p: s.p.clone().add(new THREE.Vector3(rnd(5), 2 + Math.random() * 4, rnd(5))),
+            v: new THREE.Vector3(rnd(2), 8 + Math.random() * 8, rnd(2)),
+            life: 0.5 + Math.random() * 0.4, s0: 3.5, s1: 1.5, c0: 0xff9a40, c1: 0x000000, drag: 0.5,
+          });
+        }
+      }
+    }
+    this.fire.update(dt); this.smoke.update(dt);
+  }
+
+  clear() { this.fire.clear(); this.smoke.clear(); this.smokers.length = 0; }
 }
 
 // ---------- dźwięk (generowany proceduralnie, przestrzenny) ----------

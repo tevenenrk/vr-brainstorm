@@ -25,7 +25,9 @@
     kbd { background: #2c3830; border-radius: 4px; padding: 1px 5px; font-size: 12px; }
     #hud { position: fixed; right: 16px; top: 16px; }
     #hud canvas { width: 300px; height: auto; display: block; }
-    body.in-xr #panel, body.in-xr #hud { display: none; }
+    #menu { position: fixed; right: 16px; top: 270px; display: none; }
+    #menu canvas { width: 300px; height: auto; display: block; cursor: pointer; }
+    body.in-xr #panel, body.in-xr #hud, body.in-xr #menu { display: none !important; }
     @media (max-width: 700px) { #hud canvas { width: 200px; } #panel { max-width: calc(100% - 250px); } }
   </style>
   <script type="importmap">
@@ -45,12 +47,16 @@
     <div class="btns">
       <button id="btn-vr">Wejdź w VR</button>
       <button id="btn-ar" class="alt">Mixed Reality</button>
+      <button id="btn-menu" class="alt">Opcje</button>
     </div>
     <p id="xr-note"></p>
-    <p><b>Na komputerze:</b> klik / <kbd>Spacja</kbd> — ognia, przeciąganie — obrót kamery, kółko — zoom,
-      <kbd>H</kbd> — tor płaski/stromy, <kbd>N</kbd> — nowa gra, <kbd>R</kbd> — reset widoku.</p>
+    <p><b>Na komputerze:</b> klik / <kbd>Spacja</kbd> — salwa, 2× klik — ogień ciągły,
+      <kbd>Shift</kbd>+przeciągnij — obszar ostrzału, <kbd>L</kbd> — zablokuj cel,
+      <kbd>W</kbd>/<kbd>S</kbd> — kąt lufy, <kbd>O</kbd> — opcje, <kbd>N</kbd> — nowa gra,
+      przeciąganie — obrót kamery, kółko — zoom.</p>
   </div>
   <div id="hud"></div>
+  <div id="menu"></div>
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>

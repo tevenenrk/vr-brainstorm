@@ -11,28 +11,51 @@ export const BASE_Y = -45;          // spód "bryły" dioramy
 
 // Balistyka
 export const G = 9.81;
-export const MUZZLE_V = 265;        // m/s (zasięg maks. ~7 km)
-export const SHELL_TIME_SCALE = 5;  // pociski lecą 5x szybciej niż w rzeczywistości
-export const RELOAD_TIME = 4.0;     // s
+export const MAX_V = 420;           // maks. prędkość wylotowa (najmocniejszy ładunek), m/s
 export const LETHAL_RADIUS = 40;    // m
-export const DISPERSION = {         // rozrzut salwy
-  elevationDeg: 0.22,
-  azimuthDeg: 0.35,
-  velocity: 0.005,
+export const CRATER = { r: 17, depth: 6 };
+export const DISPERSION = {         // rozrzut pojedynczego strzału
+  elevationDeg: 0.2,
+  azimuthDeg: 0.3,
+  velocity: 0.004,
 };
+export const ANGLE_MIN = 15, ANGLE_MAX = 85;
+export const GUNS_MAX = 8;
 
 // Rozmieszczenie
-export const BATTERY_Z = 1800;      // bateria przy "bliższym" końcu stołu
+export const BATTERY_Z = 1530;      // linia dział
+export const HOME = { z0: 1690, z1: 1955, count: 14 }; // wioska za działami
 export const SPAWN_Z = -1940;       // wróg wychodzi z dalekiego końca
-export const BREACH_Z = 1660;       // linia, której wróg nie może przekroczyć
-export const MAX_BREACHES = 10;
+export const BRIDGES_X = [-345, -15, 315];
 
 // Domyślne położenie stołu (metry rzeczywiste, układ local-floor)
 export const TABLE_DEFAULT = {
   scale: 0.8,
-  height: 0.85,
+  height: 0.9,
 };
 
 const params = new URLSearchParams(location.search);
 export const SHADOWS = params.get('shadows') !== '0';
 export const SEED = parseInt(params.get('seed') || '1337', 10);
+
+// Opcje zmieniane w menu (zapamiętywane w przeglądarce)
+export const DIFFICULTY_NAMES = ['Łatwa', 'Normalna', 'Trudna', 'Piekło'];
+const DEFAULT_OPTS = {
+  guns: 4,           // liczba dział
+  reload: 5,         // bazowy czas ładowania, s (każde działo ma własny, ±15%)
+  angle: 60,         // kąt podniesienia lufy, stopnie
+  speed: 1,          // mnożnik szybkości pocisków (1 = domyślnie)
+  difficulty: 1,
+};
+export const OPTS = { ...DEFAULT_OPTS };
+try {
+  const saved = JSON.parse(localStorage.getItem('artyleria-opts') || '{}');
+  for (const k of Object.keys(DEFAULT_OPTS)) if (typeof saved[k] === 'number') OPTS[k] = saved[k];
+} catch (e) { /* brak dostępu do pamięci — domyślne */ }
+export function saveOpts() {
+  try { localStorage.setItem('artyleria-opts', JSON.stringify(OPTS)); } catch (e) { /* ignoruj */ }
+}
+
+// Czas gry pocisku: ile sekund "fizycznych" mija na sekundę rzeczywistą.
+// 7 => tor stromy na ~3 km trwa ok. 4–5 s (2x dłużej niż płaski tor w poprzedniej wersji).
+export const shellTimeScale = () => 7 * OPTS.speed;

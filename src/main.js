@@ -2,14 +2,15 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import {
-  MAP_SCALE, LETHAL_RADIUS, MAX_BREACHES, SHELL_TIME_SCALE, TABLE_DEFAULT, SHADOWS, SEED, RELOAD_TIME,
+  MAP_SCALE, LETHAL_RADIUS, TABLE_DEFAULT, SHADOWS, SEED, OPTS, saveOpts, shellTimeScale,
+  ANGLE_MIN, ANGLE_MAX, GUNS_MAX, CRATER,
 } from './config.js';
 import { Terrain } from './terrain.js';
 import { Effects, Sound } from './effects.js';
 import { Battery } from './artillery.js';
 import { Enemies } from './enemies.js';
 import { TableManipulator } from './table.js';
-import { Hud, HelpBoard } from './hud.js';
+import { Hud, Menu } from './hud.js';
 
 // ---------- renderer / scena ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -24,48 +25,36 @@ document.getElementById('app').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 const SKY = new THREE.Color(0x1d262c);
+const makeFog = () => new THREE.Fog(0x1d262c, 10, 45);
 scene.background = SKY;
-scene.fog = new THREE.Fog(0x1d262c, 10, 45);
+scene.fog = makeFog();
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 200);
-camera.position.set(0.55, 1.55, 0.45);
 scene.add(camera);
 
 // otoczenie (ukrywane w trybie MR/passthrough)
 const env = new THREE.Group();
 scene.add(env);
 {
-  const skyGeo = new THREE.SphereGeometry(60, 32, 16);
   const skyMat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
     uniforms: { top: { value: new THREE.Color(0x3a5a78) }, bottom: { value: new THREE.Color(0x1a2026) } },
     vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
     fragmentShader: 'uniform vec3 top; uniform vec3 bottom; varying vec3 vP; void main(){ float t = smoothstep(-0.1, 0.6, vP.y); gl_FragColor = vec4(mix(bottom, top, t), 1.0); }',
   });
-  env.add(new THREE.Mesh(skyGeo, skyMat));
+  env.add(new THREE.Mesh(new THREE.SphereGeometry(60, 32, 16), skyMat));
   const cv = document.createElement('canvas'); cv.width = cv.height = 256;
   const c = cv.getContext('2d');
   c.fillStyle = '#2a2f2c'; c.fillRect(0, 0, 256, 256);
   c.strokeStyle = '#3d4540'; c.lineWidth = 3; c.strokeRect(0, 0, 256, 256);
   const tex = new THREE.CanvasTexture(cv);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(24, 24);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
+  tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
   const floor = new THREE.Mesh(new THREE.CircleGeometry(24, 64), new THREE.MeshLambertMaterial({ map: tex }));
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   env.add(floor);
 }
-
-// nogi stołu (tylko w VR / na komputerze; w MR stół "stoi" w Twoim pokoju)
-const legMat = new THREE.MeshLambertMaterial({ color: 0x3b2516 });
-const legs = [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sz]) => {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0), legMat);
-  m.castShadow = true;
-  m.userData.corner = new THREE.Vector3(sx * 0.255, 0, sz * 1.0);
-  env.add(m);
-  return m;
-});
 
 const hemi = new THREE.HemisphereLight(0xe4f0ff, 0x4a3c28, 1.6);
 scene.add(hemi);
@@ -76,7 +65,7 @@ sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.bias = -0.0004;
 scene.add(sun, sun.target);
 
-// ---------- stół i świat w miniaturze ----------
+// ---------- lewitująca platforma ze światem w miniaturze ----------
 const tableRoot = new THREE.Group();
 scene.add(tableRoot);
 const mapGroup = new THREE.Group();
@@ -87,16 +76,14 @@ const terrain = new Terrain(SEED);
 mapGroup.add(terrain.group);
 const effects = new Effects(mapGroup, terrain);
 const sound = new Sound(camera, scene);
-const battery = new Battery(terrain, mapGroup, effects, sound);
+const battery = new Battery(terrain, mapGroup, effects);
 const enemies = new Enemies(terrain, mapGroup);
 const table = new TableManipulator(tableRoot);
 
 const hud = new Hud();
-const help = new HelpBoard();
-help.mesh.position.set(-0.62, 0.22, 0.62);
-help.mesh.rotation.set(-0.2, 0.75, 0, 'YXZ');
-tableRoot.add(help.mesh);
+const menu = new Menu();
 document.getElementById('hud').appendChild(hud.canvas);
+document.getElementById('menu').appendChild(menu.canvas);
 
 function placeTable() {
   const p = new THREE.Vector3(), q = new THREE.Quaternion();
@@ -106,8 +93,8 @@ function placeTable() {
   f.normalize();
   const s = TABLE_DEFAULT.scale;
   tableRoot.scale.setScalar(s);
-  const dist = 0.38 + 1.0 * s; // bliższa krawędź ~38 cm od użytkownika
-  const y = renderer.xr.isPresenting ? THREE.MathUtils.clamp(p.y - 0.7, 0.5, 1.05) : TABLE_DEFAULT.height;
+  const dist = 0.38 + 1.0 * s;
+  const y = renderer.xr.isPresenting ? THREE.MathUtils.clamp(p.y - 0.65, 0.5, 1.1) : TABLE_DEFAULT.height;
   tableRoot.position.set(p.x + f.x * dist, y, p.z + f.z * dist);
   tableRoot.rotation.set(0, Math.atan2(-f.x, -f.z), 0);
   if (table.active) table.begin();
@@ -116,8 +103,15 @@ function placeTable() {
 // ---------- stan gry ----------
 let gameOver = false;
 let flash = { text: '', until: 0, color: '#ffe9a0' };
-let aim = null;
+let aim = null;          // punkt na terenie, w który celuje promień
+let lock = null;         // zablokowany cel: {type:'point',p} lub obszar {type:'area',x0,x1,z0,z1}
+let drawing = null;      // wyznaczanie obszaru w toku
+let lastTrig = -10;
 let clockT = 0;
+let menuHover = false;
+let optsDirty = 0;
+
+function showFlash(text, dur = 2, color = '#ffe9a0') { flash = { text, until: clockT + dur, color }; }
 
 function newGame() {
   enemies.reset();
@@ -125,41 +119,123 @@ function newGame() {
   effects.clear();
   terrain.resetDamage();
   gameOver = false;
+  lock = null;
   showFlash('Nowa gra — pierwsza fala za chwilę', 2.5);
 }
 
-function showFlash(text, dur = 2, color = '#ffe9a0') { flash = { text, until: clockT + dur, color }; }
-
-function toggleArc() {
-  battery.highArc = !battery.highArc;
-  showFlash(battery.highArc ? 'Tor STROMY' : 'Tor PŁASKI', 1.2, '#cfe8ff');
+function currentSpec() {
+  if (lock) return lock;
+  return aim ? { type: 'point', p: aim.local } : null;
 }
 
-function toggleHelp(v) { help.mesh.visible = v ?? !help.mesh.visible; }
+function rectOf(d) {
+  return {
+    x0: Math.min(d.start.x, d.cur.x), x1: Math.max(d.start.x, d.cur.x),
+    z0: Math.min(d.start.z, d.cur.z), z1: Math.max(d.start.z, d.cur.z),
+  };
+}
+
+function startArea() {
+  aim = computeAim();
+  if (aim) drawing = { start: aim.local.clone(), cur: aim.local.clone() };
+  else drawing = null;
+}
+
+function endArea() {
+  const hadArea = lock && lock.type === 'area';
+  if (!drawing) { if (hadArea) { lock = null; showFlash('Obszar usunięty', 1.5); } return; }
+  const r = rectOf(drawing);
+  drawing = null;
+  if (r.x1 - r.x0 < 25 && r.z1 - r.z0 < 25) {
+    if (hadArea) { lock = null; showFlash('Obszar usunięty', 1.5); }
+    return;
+  }
+  lock = { type: 'area', ...r };
+  showFlash(`Obszar ostrzału ${Math.round(r.x1 - r.x0)} × ${Math.round(r.z1 - r.z0)} m`, 2, '#cfe8ff');
+}
+
+function toggleLock() {
+  if (lock) { lock = null; showFlash('Cel odblokowany', 1.2, '#cfe8ff'); }
+  else if (aim) { lock = { type: 'point', p: aim.local.clone() }; showFlash('Cel zablokowany', 1.2, '#cfe8ff'); }
+}
+
+function setAngle(a) {
+  OPTS.angle = THREE.MathUtils.clamp(a, ANGLE_MIN, ANGLE_MAX);
+  optsDirty = 1;
+}
+
+function toggleMenu(v) {
+  const show = v ?? !menu.mesh.visible;
+  menu.mesh.visible = show;
+  hud.mesh.visible = !show;
+  document.getElementById('menu').style.display = show ? 'block' : 'none';
+}
+
+function menuAction(act) {
+  const clamp = THREE.MathUtils.clamp;
+  switch (act) {
+    case 'guns-': case 'guns+':
+      OPTS.guns = clamp(OPTS.guns + (act.endsWith('+') ? 1 : -1), 1, GUNS_MAX);
+      battery.setGunCount(OPTS.guns);
+      break;
+    case 'reload-': case 'reload+':
+      OPTS.reload = clamp(OPTS.reload + (act.endsWith('+') ? 0.5 : -0.5), 1, 20); break;
+    case 'angle-': case 'angle+':
+      setAngle(Math.round(OPTS.angle / 5) * 5 + (act.endsWith('+') ? 5 : -5)); break;
+    case 'speed-': case 'speed+':
+      OPTS.speed = clamp(OPTS.speed + (act.endsWith('+') ? 0.25 : -0.25), 0.25, 3); break;
+    case 'diff-': case 'diff+':
+      OPTS.difficulty = clamp(OPTS.difficulty + (act.endsWith('+') ? 1 : -1), 0, 3); break;
+    case 'new': newGame(); toggleMenu(false); break;
+    case 'place': placeTable(); break;
+    case 'close': toggleMenu(false); break;
+    default: break;
+  }
+  saveOpts();
+}
+
+function onTrigger() {
+  sound.resume();
+  if (menuHover && menu.hover >= 0) { menuAction(menu.buttons[menu.hover].act); return; }
+  if (gameOver) { showFlash('Koniec gry — Y / N: nowa gra', 2, '#ff8a7a'); return; }
+  if (battery.continuous) { battery.continuous = false; lastTrig = -10; showFlash('Ogień ciągły: STOP', 1.2); return; }
+  if (clockT - lastTrig < 0.4) { battery.continuous = true; lastTrig = -10; showFlash('OGIEŃ CIĄGŁY', 1.5, '#ff8a7a'); return; }
+  lastTrig = clockT;
+  const spec = currentSpec();
+  if (!spec) return;
+  if (battery.fire(spec) === 0) showFlash('Działa się ładują…', 1, '#e8a040');
+}
 
 const toWorld = (pLocal) => pLocal.clone().applyMatrix4(mapGroup.matrixWorld);
 
 battery.onFire = (muzzle) => {
-  sound.play('gun', toWorld(muzzle), 0.7);
-  pulse(aimCtrl, 0.7, 70);
+  sound.play('gun', toWorld(muzzle), 0.6);
+  pulse(aimCtrl, 0.6, 60);
 };
 battery.onImpact = (p, water) => {
   effects.explosion(p, water);
-  if (!water) terrain.scorch(p.x, p.z, LETHAL_RADIUS * 0.75);
+  const houses = terrain.scorch(p.x, p.z, LETHAL_RADIUS * 0.8);
+  if (!water) terrain.crater(p.x, p.z);
+  for (const { v, h } of houses) {
+    effects.addSmoker(new THREE.Vector3(h.x, h.y + 6, h.z), 30);
+    if (v.home) showFlash('Trafiłeś własny dom!', 2, '#ff8a7a');
+  }
+  for (const b of terrain.damageBridges(p.x, p.z)) {
+    effects.addSmoker(new THREE.Vector3((b.ax + b.bx) / 2, b.y, (b.az + b.bz) / 2), 20, false);
+    showFlash('Most zniszczony!', 2, '#cfe8ff');
+  }
   const k = enemies.blast(p, LETHAL_RADIUS);
   sound.play(water ? 'splash' : 'boom', toWorld(p), 1);
   if (k > 0) showFlash(k === 1 ? 'Trafiony 1 żołnierz' : `Trafionych: ${k}!`, 1.8, '#ffb4a8');
-  for (const o of ctrls) pulse(o, 0.25, 40);
+  for (const o of ctrls) pulse(o, 0.2, 35);
 };
-
-function fire() {
-  sound.resume();
-  if (gameOver) { showFlash('Koniec gry — Y / N: nowa gra', 2, '#ff8a7a'); return; }
-  if (!aim) return;
-  const n = battery.fire(aim.local);
-  if (n > 0) toggleHelp(false);
-  else showFlash('Działa się ładują…', 1, '#e8a040');
-}
+enemies.onHouseDestroyed = (h) => {
+  const p = new THREE.Vector3(h.x, h.y + 6, h.z);
+  effects.burst(p);
+  effects.addSmoker(p, 40);
+  sound.play('boom', toWorld(p), 0.5);
+  showFlash('Wróg podpalił dom we wiosce!', 2, '#ff8a7a');
+};
 
 // ---------- kontrolery XR ----------
 const factory = new XRControllerModelFactory();
@@ -171,14 +247,22 @@ function pulse(o, intensity, ms) {
   if (act && act.pulse) act.pulse(intensity, ms).catch?.(() => {});
 }
 
+function attachPanels() {
+  const off = ctrls.find((o) => o.source && o !== aimCtrl);
+  if (!off) return;
+  off.grip.add(hud.mesh);
+  off.grip.add(menu.mesh);
+  hud.mesh.position.set(0, 0.075, 0.035); hud.mesh.rotation.set(-0.75, 0, 0);
+  menu.mesh.position.set(0, 0.15, -0.01); menu.mesh.rotation.set(-0.55, 0, 0);
+}
+
 const ctrls = [0, 1].map((i) => {
   const c = renderer.xr.getController(i);
   const grip = renderer.xr.getControllerGrip(i);
   grip.add(factory.createControllerModel(grip));
   scene.add(c, grip);
   const ray = new THREE.Line(rayGeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 }));
-  ray.scale.z = 2;
-  ray.visible = false;
+  ray.scale.z = 2; ray.visible = false;
   c.add(ray);
   const tip = new THREE.Mesh(new THREE.SphereGeometry(0.004, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
   tip.visible = false;
@@ -186,20 +270,19 @@ const ctrls = [0, 1].map((i) => {
   const o = { c, grip, ray, tip, source: null, hand: null, prev: [] };
   c.addEventListener('connected', (e) => {
     o.source = e.data; o.hand = e.data.handedness; ray.visible = true;
-    if (o.hand === 'left') {
-      grip.add(hud.mesh);
-      hud.mesh.position.set(0, 0.075, 0.035);
-      hud.mesh.rotation.set(-0.75, 0, 0);
-    }
     if (!aimCtrl || o.hand === 'right') aimCtrl = o;
+    attachPanels();
   });
   c.addEventListener('disconnected', () => {
     o.source = null; ray.visible = false; tip.visible = false;
-    if (hud.mesh.parent === grip) grip.remove(hud.mesh);
     table.release(grip);
     if (aimCtrl === o) aimCtrl = ctrls.find((x) => x.source) || null;
+    attachPanels();
   });
-  c.addEventListener('selectstart', () => { aimCtrl = o; aim = computeAim(); fire(); });
+  c.addEventListener('selectstart', () => {
+    if (!(menuHover && menu.hover >= 0) && aimCtrl !== o) { aimCtrl = o; attachPanels(); aim = computeAim(); }
+    onTrigger();
+  });
   c.addEventListener('squeezestart', () => table.grab(grip));
   c.addEventListener('squeezeend', () => table.release(grip));
   return o;
@@ -210,24 +293,28 @@ function pollXRInput(dt) {
     const gp = o.source?.gamepad;
     if (!gp) continue;
     const pressed = gp.buttons.map((b) => b.pressed);
-    const edge = (i) => pressed[i] && !o.prev[i];
-    if (o.hand === 'right') {
-      if (edge(4)) toggleArc();
-      if (edge(5)) toggleHelp();
-    } else if (o.hand === 'left') {
-      if (edge(4)) placeTable();
-      if (edge(5)) newGame();
-    }
+    const down = (i) => pressed[i] && !o.prev[i];
+    const up = (i) => !pressed[i] && o.prev[i];
     const ax = gp.axes[2] || 0, ay = gp.axes[3] || 0;
-    if (Math.abs(ax) > 0.2 || Math.abs(ay) > 0.2) {
-      const pivot = aim ? aim.world : tableRoot.getWorldPosition(new THREE.Vector3());
-      table.nudge(pivot, Math.exp(-ay * dt * 1.4), -ax * dt * 1.6);
+    if (o.hand === 'right') {
+      if (down(4)) startArea();
+      if (up(4)) endArea();
+      if (down(5)) toggleMenu();
+      if (down(3)) toggleLock();
+      if (Math.abs(ay) > 0.25) setAngle(OPTS.angle - ay * dt * 25);
+    } else if (o.hand === 'left') {
+      if (down(4)) placeTable();
+      if (down(5)) newGame();
+      if (Math.abs(ax) > 0.2 || Math.abs(ay) > 0.2) {
+        const pivot = aim ? aim.world : tableRoot.getWorldPosition(new THREE.Vector3());
+        table.nudge(pivot, Math.exp(-ay * dt * 1.4), -ax * dt * 1.6);
+      }
     }
     o.prev = pressed;
   }
 }
 
-// ---------- desktop: mysz + klawiatura ----------
+// ---------- komputer: mysz + klawiatura ----------
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.minDistance = 0.05;
@@ -241,22 +328,40 @@ renderer.domElement.addEventListener('pointermove', (e) => {
   mouseInside = true;
 });
 renderer.domElement.addEventListener('pointerleave', () => { mouseInside = false; });
-renderer.domElement.addEventListener('pointerdown', (e) => { downAt = { x: e.clientX, y: e.clientY, b: e.button }; sound.resume(); });
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  sound.resume();
+  mouse.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+  mouseInside = true;
+  if (e.shiftKey && e.button === 0) { controls.enabled = false; startArea(); downAt = null; return; }
+  downAt = { x: e.clientX, y: e.clientY, b: e.button };
+});
 renderer.domElement.addEventListener('pointerup', (e) => {
-  if (downAt && downAt.b === 0 && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < 6) { aim = computeAim(); fire(); }
+  if (drawing) { endArea(); return; }
+  if (downAt && downAt.b === 0 && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < 6) { aim = computeAim(); onTrigger(); }
   downAt = null;
 });
 window.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
-  if (k === ' ') { aim = computeAim(); fire(); e.preventDefault(); }
-  if (k === 'h' || k === 'a') toggleArc();
+  if (k === ' ') { aim = computeAim(); onTrigger(); e.preventDefault(); }
+  if (k === 'c') { battery.continuous = !battery.continuous; showFlash(battery.continuous ? 'OGIEŃ CIĄGŁY' : 'Ogień ciągły: STOP', 1.2); }
+  if (k === 'l') toggleLock();
+  if (k === 'escape') { lock = null; drawing = null; }
+  if (k === 'w' || k === 'arrowup') { setAngle(OPTS.angle + 5); saveOpts(); }
+  if (k === 's' || k === 'arrowdown') { setAngle(OPTS.angle - 5); saveOpts(); }
   if (k === 'n' || k === 'y') newGame();
-  if (k === 'b' || k === '?') toggleHelp();
+  if (k === 'o' || k === 'b') toggleMenu();
   if (k === 'r' || k === 'x') resetDesktopView();
 });
+document.getElementById('btn-menu').onclick = () => toggleMenu();
+
+// menu na komputerze (to samo menu co w VR)
+const menuPx = (e) => [e.offsetX * (menu.canvas.width / menu.canvas.clientWidth), e.offsetY * (menu.canvas.height / menu.canvas.clientHeight)];
+menu.canvas.addEventListener('pointermove', (e) => { const [x, y] = menuPx(e); menu.hover = menu.hit(x, y); });
+menu.canvas.addEventListener('pointerleave', () => { menu.hover = -1; });
+menu.canvas.addEventListener('click', (e) => { const [x, y] = menuPx(e); const i = menu.hit(x, y); if (i >= 0) menuAction(menu.buttons[i].act); });
 
 function resetDesktopView() {
-  camera.position.set(0.55, 1.55, 0.45);
+  camera.position.set(0.5, 1.6, 0.45);
   tableRoot.position.set(0, TABLE_DEFAULT.height, -1.18);
   tableRoot.rotation.set(0, 0, 0);
   tableRoot.scale.setScalar(TABLE_DEFAULT.scale);
@@ -274,27 +379,40 @@ window.addEventListener('resize', () => {
 // ---------- celowanie ----------
 const _o = new THREE.Vector3(), _d = new THREE.Vector3(), _q = new THREE.Quaternion();
 const _inv = new THREE.Matrix4();
-function computeAim() {
+function aimRay() {
   if (renderer.xr.isPresenting) {
-    if (!aimCtrl?.source) return null;
+    if (!aimCtrl?.source) return false;
     aimCtrl.c.getWorldPosition(_o);
     aimCtrl.c.getWorldQuaternion(_q);
     _d.set(0, 0, -1).applyQuaternion(_q);
-  } else {
-    if (!mouseInside) return null;
-    raycaster.setFromCamera(mouse, camera);
-    _o.copy(raycaster.ray.origin); _d.copy(raycaster.ray.direction);
+    return true;
   }
+  if (!mouseInside) return false;
+  raycaster.setFromCamera(mouse, camera);
+  _o.copy(raycaster.ray.origin); _d.copy(raycaster.ray.direction);
+  return true;
+}
+
+function computeAim() {
+  if (!aimRay()) return null;
   _inv.copy(mapGroup.matrixWorld).invert();
-  const oL = _o.clone().applyMatrix4(_inv);
-  const dL = _d.clone().transformDirection(_inv);
-  const hit = terrain.raycast(oL, dL);
+  const hit = terrain.raycast(_o.clone().applyMatrix4(_inv), _d.clone().transformDirection(_inv));
   if (!hit) return null;
   return { local: hit, world: toWorld(hit), origin: _o.clone() };
 }
 
+function updateMenuHover() {
+  menuHover = false;
+  if (!renderer.xr.isPresenting || !menu.mesh.visible || !aimRay()) return null;
+  raycaster.set(_o, _d);
+  const hit = raycaster.intersectObject(menu.mesh, false)[0];
+  if (!hit) { menu.hover = -1; return null; }
+  menuHover = true;
+  menu.hover = menu.hit(hit.uv.x * menu.canvas.width, (1 - hit.uv.y) * menu.canvas.height);
+  return hit;
+}
+
 // ---------- XR: start / koniec sesji ----------
-let xrMode = null;
 let xrFrames = 0;
 async function startXR(mode) {
   try {
@@ -302,21 +420,21 @@ async function startXR(mode) {
     const session = await navigator.xr.requestSession(mode, {
       optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking'],
     });
-    xrMode = mode;
     const ar = mode === 'immersive-ar';
     env.visible = !ar;
     scene.background = ar ? null : SKY;
-    scene.fog = ar ? null : new THREE.Fog(0x1d262c, 10, 45);
+    scene.fog = ar ? null : makeFog();
     session.addEventListener('end', () => {
-      xrMode = null;
-      env.visible = true; scene.background = SKY; scene.fog = new THREE.Fog(0x1d262c, 10, 45);
+      env.visible = true; scene.background = SKY; scene.fog = makeFog();
       document.body.classList.remove('in-xr');
+      document.getElementById('hud').appendChild(hud.canvas);
+      hud.mesh.visible = true;
       resetDesktopView();
     });
     await renderer.xr.setSession(session);
     document.body.classList.add('in-xr');
     xrFrames = 0;
-    toggleHelp(true);
+    toggleMenu(true);
   } catch (err) {
     console.error(err);
     alert('Nie udało się uruchomić sesji XR: ' + err.message);
@@ -333,6 +451,7 @@ async function setupButtons() {
     note.textContent = window.isSecureContext
       ? 'Ta przeglądarka nie obsługuje WebXR — tryb podglądu na komputerze.'
       : 'WebXR wymaga HTTPS. Otwórz stronę przez https:// (np. GitHub Pages).';
+    vrBtn.disabled = arBtn.disabled = true;
     return;
   }
   const [vr, ar] = await Promise.all([
@@ -362,34 +481,20 @@ function updateSun() {
   sun.shadow.normalBias = 0.0015 * s;
 }
 
-function updateLegs() {
-  const s = tableRoot.scale.x;
-  const topLocalY = (-45 - 42) * MAP_SCALE;
-  for (const leg of legs) {
-    const w = tableRoot.localToWorld(tmpV.copy(leg.userData.corner).setY(topLocalY));
-    const h = w.y;
-    leg.visible = h > 0.03;
-    if (!leg.visible) continue;
-    leg.position.set(w.x, 0, w.z);
-    leg.rotation.y = tableRoot.rotation.y;
-    const t = Math.min(0.05, 0.035 * s);
-    leg.scale.set(t, h, t);
-  }
-}
-
-function updateRays() {
+function updateRays(menuHit) {
   for (const o of ctrls) {
     if (!o.source) continue;
     const isAim = o === aimCtrl;
     o.ray.material.opacity = isAim ? 0.75 : 0.2;
-    if (isAim && aim) {
-      const dist = aim.origin.distanceTo(aim.world);
-      o.ray.scale.z = dist;
-      o.tip.visible = true;
-      o.tip.position.copy(aim.world);
-    } else {
-      o.ray.scale.z = 1.5;
-      o.tip.visible = false;
+    o.tip.visible = false;
+    o.ray.scale.z = 1.5;
+    if (!isAim) continue;
+    if (menuHit) {
+      o.ray.scale.z = menuHit.distance;
+      o.tip.visible = true; o.tip.position.copy(menuHit.point);
+    } else if (aim) {
+      o.ray.scale.z = aim.origin.distanceTo(aim.world);
+      o.tip.visible = true; o.tip.position.copy(aim.world);
     }
   }
 }
@@ -397,16 +502,18 @@ function updateRays() {
 function hudState() {
   const pv = battery.preview;
   let msg = '', msgColor = '#ffe9a0';
-  if (gameOver) { msg = 'KONIEC GRY — Y: nowa gra'; msgColor = '#ff8a7a'; }
+  if (gameOver) { msg = 'WIOSKA SPALONA — Y: nowa gra'; msgColor = '#ff8a7a'; }
   else if (flash.until > clockT) { msg = flash.text; msgColor = flash.color; }
   else if (!enemies.waveActive) msg = `Fala ${enemies.wave + 1} za ${Math.ceil(enemies.waveTimer)} s`;
+  const mode = drawing ? 'wyznaczanie obszaru' : lock ? (lock.type === 'area' ? 'OBSZAR' : 'CEL ZABLOKOWANY') : 'celowanie';
   return {
     wave: enemies.wave, kills: enemies.kills, alive: enemies.aliveCount,
-    breaches: enemies.breaches, maxBreaches: MAX_BREACHES, high: battery.highArc,
-    guns: battery.guns.map((g) => Math.round((1 - g.reload / RELOAD_TIME) * 10) / 10),
+    homeAlive: terrain.homeAlive(), homeTotal: terrain.home.houses.length,
+    angle: Math.round(OPTS.angle), mode, continuous: battery.continuous,
+    guns: battery.guns.map((g) => Math.round((1 - g.reload / battery.reloadTime(g)) * 10) / 10),
     status: pv ? pv.status : 'none',
     dist: pv ? Math.round(pv.dist / 10) * 10 : 0,
-    flight: pv ? Math.round((pv.tr.t / SHELL_TIME_SCALE) * 10) / 10 : 0,
+    flight: pv ? Math.round((pv.tr.t / shellTimeScale()) * 10) / 10 : 0,
     msg, msgColor,
   };
 }
@@ -415,7 +522,7 @@ renderer.setAnimationLoop(() => {
   const dt = Math.min(0.05, clock.getDelta());
   clockT += dt;
   const xr = renderer.xr.isPresenting;
-  controls.enabled = !xr;
+  controls.enabled = !xr && !drawing;
 
   if (xr) {
     xrFrames++;
@@ -425,24 +532,31 @@ renderer.setAnimationLoop(() => {
   table.update();
   scene.updateMatrixWorld();
 
+  const menuHit = updateMenuHover();
   aim = computeAim();
-  battery.update(dt, aim ? aim.local : null);
+  if (drawing && aim) drawing.cur = aim.local.clone();
+
+  battery.update(dt, gameOver ? null : currentSpec(), drawing ? rectOf(drawing) : null, !!lock);
   enemies.update(dt, !gameOver);
-  if (!gameOver && enemies.breaches >= MAX_BREACHES) {
+  if (!gameOver && terrain.homeAlive() === 0) {
     gameOver = true;
-    sound.play('boom', camera.getWorldPosition(tmpV), 0.6);
+    battery.continuous = false;
   }
   effects.update(dt);
   terrain.update();
   updateSun();
-  updateLegs();
-  updateRays();
-  terrain.trimMaterial.emissive.setHex(table.active ? 0x5a4410 : 0x000000);
+  updateRays(menuHit);
+  terrain.glowMaterial.color.setHex(table.active ? 0xbff4ff : 0x4fd2ff);
   hud.draw(hudState());
+  menu.draw({ ...OPTS });
+  if (optsDirty) { optsDirty += dt; if (optsDirty > 1.5) { saveOpts(); optsDirty = 0; } }
 
   if (!xr) controls.update();
   renderer.render(scene, camera);
 });
 
 // do testów w konsoli
-window.__sim = { THREE, controls, table, scene, terrain, battery, enemies, tableRoot, camera, fire, newGame, toggleArc, get aim() { return aim; }, set aim(v) { aim = v; } };
+window.__sim = {
+  THREE, controls, table, scene, terrain, battery, enemies, tableRoot, camera, newGame, onTrigger, menuAction, toggleLock,
+  get aim() { return aim; }, set aim(v) { aim = v; }, get lock() { return lock; }, set lock(v) { lock = v; }, CRATER,
+};
