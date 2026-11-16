@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
-  MAP_W, MAP_D, RES_X, RES_Z, WATER_LEVEL, BASE_Y, HOME, CRATER, BRIDGES_X,
+  MAP_W, MAP_D, RES_X, RES_Z, WATER_LEVEL, BASE_Y, HOME, CRATER,
 } from './config.js';
 
 // ---------- losowość i szum ----------
@@ -66,7 +66,6 @@ export class Terrain {
         this.heights[j * this.nx + i] = this.genHeight(x, z);
       }
     }
-    this.planBridges();
     this.baseHeights = this.heights.slice();
     this.group = new THREE.Group();
     this.dirtyJ0 = Infinity; this.dirtyJ1 = -1;
@@ -74,13 +73,10 @@ export class Terrain {
     this.buildSkirt();
     this.buildWater();
     this.buildPlatform();
-    this.buildBridges();
     this.villages = [];
     this.buildVillages();
     this.buildTrees();
   }
-
-  riverZ(x) { return 220 + 150 * Math.sin(x / 210 + 1.3) + 45 * Math.sin(x / 73 + 0.4); }
 
   genHeight(x, z) {
     let h = 20 + fbm(this.n1, x / 650 + 10, z / 650 - 3, 5) * 70;
@@ -93,10 +89,6 @@ export class Terrain {
     h = lerp(h, 40 + fbm(this.n2, x / 120, z / 120, 2) * 4, smoothstep(PLATEAU_Z0, PLATEAU_Z1, z));
     const dv = Math.hypot(x - VILLAGE.x, z - VILLAGE.z);
     h = lerp(h, 12, (1 - smoothstep(VILLAGE.r * 0.6, VILLAGE.r * 1.6, dv)) * 0.8);
-    // rzeka
-    const dr = Math.abs(z - this.riverZ(x));
-    const w = 9 + 6 * fbm(this.n4, x / 120, 0.5, 2);
-    h = lerp(-7, h, smoothstep(w, w + 75, dr));
     // jezioro i staw
     const dl = Math.hypot((x - LAKE.x) / LAKE.r, (z - LAKE.z) / (LAKE.r * 1.4)) + fbm(this.n4, x / 80, z / 80, 2) * 0.25;
     h = lerp(-9, h, smoothstep(0.7, 1.25, dl));
@@ -356,107 +348,6 @@ export class Terrain {
     this.group.add(this.underGlow);
   }
 
-  // ---------- mosty ----------
-  // wyznacza przyczółki mostów i wyrównuje teren przy nich (najazdy)
-  planBridges() {
-    this.bridgePlans = [];
-    for (const x0 of BRIDGES_X) {
-      const zc = this.riverZ(x0);
-      const dzdx = (this.riverZ(x0 + 1) - this.riverZ(x0 - 1)) / 2;
-      let nx = -dzdx, nz = 1; const l = Math.hypot(nx, nz); nx /= l; nz /= l;
-      let ta = 0, tb = 0;
-      while (ta < 220 && this.heightAt(x0 - nx * ta, zc - nz * ta) < 4) ta += 2;
-      while (tb < 220 && this.heightAt(x0 + nx * tb, zc + nz * tb) < 4) tb += 2;
-      ta += 6; tb += 6;
-      const ax = x0 - nx * ta, az = zc - nz * ta, bx = x0 + nx * tb, bz = zc + nz * tb;
-      const y = 8;
-      // najazdy: teren wokół przyczółków stopniowo do wysokości pomostu
-      for (const [ex, ez, sx, sz] of [[ax, az, -nx, -nz], [bx, bz, nx, nz]]) {
-        for (let j = 0; j <= RES_Z; j++) {
-          for (let i = 0; i <= RES_X; i++) {
-            const vx = -MAP_W / 2 + i * DX, vz = -MAP_D / 2 + j * DZ;
-            const along = (vx - ex) * sx + (vz - ez) * sz;      // >0: w głąb lądu
-            const side = Math.abs((vx - ex) * sz - (vz - ez) * sx);
-            if (along < -4 || along > 90 || side > 26) continue;
-            const k = j * this.nx + i;
-            const target = y - 0.5 + Math.max(0, along - 15) * 0.18; // łagodna rampa w górę
-            const w = (1 - smoothstep(12, 26, side)) * (1 - smoothstep(60, 90, along));
-            const cur = this.heights[k];
-            const blended = lerp(cur, Math.min(cur, target), w);
-            this.heights[k] = along < 15 ? lerp(cur, y - 0.5, w) : blended;
-          }
-        }
-      }
-      this.bridgePlans.push({ ax, az, bx, bz, y });
-    }
-  }
-
-  buildBridges() {
-    this.bridges = [];
-    const stone = new THREE.MeshLambertMaterial({ color: 0x8b8478, flatShading: true });
-    const wood = new THREE.MeshLambertMaterial({ color: 0x6e4b2c });
-    for (const { ax, az, bx, bz, y } of this.bridgePlans) {
-      const len = Math.hypot(bx - ax, bz - az);
-      const grp = new THREE.Group();
-      grp.position.set((ax + bx) / 2, y, (az + bz) / 2);
-      grp.rotation.y = Math.atan2(bx - ax, bz - az);
-      const add = (parent, geo, mat, px, py, pz) => { const m = new THREE.Mesh(geo, mat); m.position.set(px, py, pz); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
-      const halves = [];
-      for (const side of [-1, 1]) {
-        const pivot = new THREE.Group();
-        pivot.position.z = side * len / 2;
-        grp.add(pivot);
-        const hz = -side * len / 4;
-        add(pivot, new THREE.BoxGeometry(15, 2.6, len / 2), wood, 0, 0, hz);
-        for (const sx of [-1, 1]) add(pivot, new THREE.BoxGeometry(0.9, 2.6, len / 2), stone, sx * 7.2, 2.4, hz);
-        halves.push(pivot);
-      }
-      // filary
-      for (let k = 1; k < 4; k++) {
-        const pz = -len / 2 + (k * len) / 4;
-        add(grp, new THREE.CylinderGeometry(2.6, 3.2, y + 10, 7), stone, 0, -(y + 10) / 2 - 1.3, pz);
-      }
-      this.group.add(grp);
-      const entryFirst = az < bz;
-      this.bridges.push({
-        ax, az, bx, bz, y, len, dx: (bx - ax) / len, dz: (bz - az) / len, group: grp, halves, hp: 3, destroyed: false,
-        entry: entryFirst ? { x: ax, z: az } : { x: bx, z: bz },
-        exit: entryFirst ? { x: bx, z: bz } : { x: ax, z: az },
-      });
-    }
-  }
-
-  bridgeDistance(b, x, z) {
-    const t = Math.max(0, Math.min(b.len, (x - b.ax) * b.dx + (z - b.az) * b.dz));
-    return Math.hypot(b.ax + b.dx * t - x, b.az + b.dz * t - z);
-  }
-
-  // wysokość pomostu, jeśli punkt leży na nienaruszonym moście
-  bridgeDeckAt(x, z) {
-    for (const b of this.bridges) {
-      if (b.destroyed) continue;
-      const t = (x - b.ax) * b.dx + (z - b.az) * b.dz;
-      if (t < -2 || t > b.len + 2) continue;
-      if (Math.abs((x - b.ax) * b.dz - (z - b.az) * b.dx) < 9) return b.y + 1.3;
-    }
-    return null;
-  }
-
-  damageBridges(x, z) {
-    const destroyed = [];
-    for (const b of this.bridges) {
-      if (b.destroyed || this.bridgeDistance(b, x, z) > 24) continue;
-      b.hp--;
-      if (b.hp <= 0) {
-        b.destroyed = true;
-        b.halves[0].rotation.x = 0.55; b.halves[1].rotation.x = -0.5;
-        b.halves[0].position.y = -3; b.halves[1].position.y = -4;
-        destroyed.push(b);
-      }
-    }
-    return destroyed;
-  }
-
   // ---------- wioski ----------
   buildVillages() {
     const rng = this.rng;
@@ -557,7 +448,6 @@ export class Terrain {
         if (h < 2.5) continue;
         if (Math.hypot(px - VILLAGE.x, pz - VILLAGE.z) < VILLAGE.r * 0.9) continue;
         if (allHouses.some((hh) => Math.abs(hh.x - px) < 22 && Math.abs(hh.z - pz) < 22)) continue;
-        if (this.bridges.some((b) => this.bridgeDistance(b, px, pz) < 18)) continue;
         if (pz > FOREST_MAX_Z) { if (rng() > 0.02 || Math.abs(pz - 1540) < 60) continue; }
         const fv = this.forestValue(px, pz);
         const t = new THREE.Color();
@@ -601,9 +491,9 @@ export class Terrain {
   markDirty(j0, j1) { this.dirtyJ0 = Math.min(this.dirtyJ0, j0); this.dirtyJ1 = Math.max(this.dirtyJ1, j1); }
 
   // lej po pocisku: wgłębienie z wałem dookoła
-  crater(x, z) {
+  crater(x, z, R = CRATER.r, D = CRATER.depth) {
     if (this.heightAt(x, z) < WATER_LEVEL + 0.5) return;
-    const R = CRATER.r, D = CRATER.depth, RR = R * 1.45;
+    const RR = R * 1.45;
     const i0 = Math.max(0, Math.floor((x - RR + MAP_W / 2) / DX)), i1 = Math.min(RES_X, Math.ceil((x + RR + MAP_W / 2) / DX));
     const j0 = Math.max(0, Math.floor((z - RR + MAP_D / 2) / DZ)), j1 = Math.min(RES_Z, Math.ceil((z + RR + MAP_D / 2) / DZ));
     const Hh = this.heights, pos = this.mesh.geometry.attributes.position.array;
@@ -656,7 +546,13 @@ export class Terrain {
   }
 
   // osmalenie, spalone drzewa, zniszczone domy. Zwraca zniszczone domy.
-  scorch(x, z, r) {
+  // r — promień osmalenia; drzewa i domy w pierścieniu [rMin, rMax] są niszczone
+  scorch(x, z, r, rMin = 0, rMax = r * 0.7, colors = true) {
+    if (colors) this.scorchColors(x, z, r);
+    return this.burn(x, z, rMin, rMax);
+  }
+
+  scorchColors(x, z, r) {
     const col = this.mesh.geometry.attributes.color.array;
     const i0 = Math.max(0, Math.floor((x - r + MAP_W / 2) / DX)), i1 = Math.min(RES_X, Math.ceil((x + r + MAP_W / 2) / DX));
     const j0 = Math.max(0, Math.floor((z - r + MAP_D / 2) / DZ)), j1 = Math.min(RES_Z, Math.ceil((z + r + MAP_D / 2) / DZ));
@@ -670,7 +566,10 @@ export class Terrain {
       }
     }
     this.markDirty(j0, j1);
+  }
 
+  burn(x, z, rMin, rMax) {
+    const r = rMax;
     const m = new THREE.Matrix4(), q = new THREE.Quaternion();
     const burnt = new THREE.Color(0.13, 0.11, 0.09);
     const touched = new Set();
@@ -679,7 +578,8 @@ export class Terrain {
         const list = this.treeGrid.get(gx + ',' + gz);
         if (!list) continue;
         for (const t of list) {
-          if (t.burnt || Math.hypot(t.x - x, t.z - z) > r * 0.7) continue;
+          const dt = Math.hypot(t.x - x, t.z - z);
+          if (t.burnt || dt > rMax || dt < rMin) continue;
           t.burnt = true;
           q.setFromAxisAngle(UP, t.r);
           m.compose(new THREE.Vector3(t.x, this.heightAt(t.x, t.z) - 0.5, t.z), q, new THREE.Vector3(t.s * 0.6, t.s * 0.45, t.s * 0.6));
@@ -693,7 +593,8 @@ export class Terrain {
     const destroyed = [];
     for (const v of this.villages) {
       for (const h of v.houses) {
-        if (!h.destroyed && Math.hypot(h.x - x, h.z - z) < r * 0.7 && this.destroyHouse(v, h)) destroyed.push({ v, h });
+        const dh = Math.hypot(h.x - x, h.z - z);
+        if (!h.destroyed && dh <= rMax && dh >= rMin && this.destroyHouse(v, h)) destroyed.push({ v, h });
       }
     }
     return destroyed;
@@ -722,10 +623,6 @@ export class Terrain {
         h.hp = h.maxHp;
         if (h.destroyed) { h.destroyed = false; this.placeHouse(v, h, false); }
       }
-    }
-    for (const b of this.bridges) {
-      b.hp = 3; b.destroyed = false;
-      for (const hv of b.halves) { hv.rotation.x = 0; hv.position.y = 0; }
     }
   }
 

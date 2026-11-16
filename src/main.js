@@ -3,10 +3,10 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import {
   MAP_SCALE, LETHAL_RADIUS, TABLE_DEFAULT, SHADOWS, SEED, OPTS, saveOpts, shellTimeScale,
-  ANGLE_MIN, ANGLE_MAX, GUNS_MAX, CRATER,
+  ANGLE_MIN, ANGLE_MAX, GUNS_MAX, CRATER, AMMO, AMMO_ORDER, ammoKey, NUKE,
 } from './config.js';
 import { Terrain } from './terrain.js';
-import { Effects, Sound } from './effects.js';
+import { Effects, Sound, shockRadius } from './effects.js';
 import { Battery } from './artillery.js';
 import { Enemies } from './enemies.js';
 import { TableManipulator } from './table.js';
@@ -110,6 +110,8 @@ let lastTrig = -10;
 let clockT = 0;
 let menuHover = false;
 let optsDirty = 0;
+let flashLight = 0;      // błysk atomowy rozjaśnia scenę
+const nukes = [];        // trwające fale uderzeniowe
 
 function showFlash(text, dur = 2, color = '#ffe9a0') { flash = { text, until: clockT + dur, color }; }
 
@@ -120,6 +122,7 @@ function newGame() {
   terrain.resetDamage();
   gameOver = false;
   lock = null;
+  nukes.length = 0;
   showFlash('Nowa gra — pierwsza fala za chwilę', 2.5);
 }
 
@@ -164,6 +167,19 @@ function setAngle(a) {
   optsDirty = 1;
 }
 
+function setAmmo(i) {
+  OPTS.ammo = (i + AMMO_ORDER.length) % AMMO_ORDER.length;
+  saveOpts();
+  const a = AMMO[ammoKey()];
+  showFlash(`Amunicja: ${a.name}`, 1.5, a.color);
+}
+
+function nextWave() {
+  if (gameOver) return;
+  enemies.startWave();
+  showFlash(`Wysłano falę ${enemies.wave}!`, 1.5, '#ffb4a8');
+}
+
 function toggleMenu(v) {
   const show = v ?? !menu.mesh.visible;
   menu.mesh.visible = show;
@@ -186,6 +202,8 @@ function menuAction(act) {
       OPTS.speed = clamp(OPTS.speed + (act.endsWith('+') ? 0.25 : -0.25), 0.25, 3); break;
     case 'diff-': case 'diff+':
       OPTS.difficulty = clamp(OPTS.difficulty + (act.endsWith('+') ? 1 : -1), 0, 3); break;
+    case 'ammo-': case 'ammo+': setAmmo(OPTS.ammo + (act.endsWith('+') ? 1 : -1)); break;
+    case 'wave': nextWave(); break;
     case 'new': newGame(); toggleMenu(false); break;
     case 'place': placeTable(); break;
     case 'close': toggleMenu(false); break;
@@ -203,7 +221,10 @@ function onTrigger() {
   lastTrig = clockT;
   const spec = currentSpec();
   if (!spec) return;
-  if (battery.fire(spec) === 0) showFlash('Działa się ładują…', 1, '#e8a040');
+  if (battery.fire(spec) === 0) {
+    if (ammoKey() === 'nuke' && battery.nukeCooldown > 0) showFlash(`Atomówka gotowa za ${Math.ceil(battery.nukeCooldown)} s`, 1.2, '#ff8a7a');
+    else showFlash('Działa się ładują…', 1, '#e8a040');
+  }
 }
 
 const toWorld = (pLocal) => pLocal.clone().applyMatrix4(mapGroup.matrixWorld);
@@ -212,22 +233,63 @@ battery.onFire = (muzzle) => {
   sound.play('gun', toWorld(muzzle), 0.6);
   pulse(aimCtrl, 0.6, 60);
 };
-battery.onImpact = (p, water) => {
-  effects.explosion(p, water);
-  const houses = terrain.scorch(p.x, p.z, LETHAL_RADIUS * 0.8);
-  if (!water) terrain.crater(p.x, p.z);
+function houseLosses(houses) {
   for (const { v, h } of houses) {
     effects.addSmoker(new THREE.Vector3(h.x, h.y + 6, h.z), 30);
     if (v.home) showFlash('Trafiłeś własny dom!', 2, '#ff8a7a');
   }
-  for (const b of terrain.damageBridges(p.x, p.z)) {
-    effects.addSmoker(new THREE.Vector3((b.ax + b.bx) / 2, b.y, (b.az + b.bz) / 2), 20, false);
-    showFlash('Most zniszczony!', 2, '#cfe8ff');
+}
+function killFlash(k) {
+  if (k > 0) showFlash(k === 1 ? 'Trafiony 1 cel' : `Trafionych: ${k}!`, 1.8, '#ffb4a8');
+}
+
+battery.onBurst = (p) => {
+  effects.airburst(p);
+  sound.play('pop', toWorld(p), 0.6);
+};
+battery.onImpact = (p, water, ammo = 'he', first = false) => {
+  if (ammo === 'bomblet') {
+    effects.miniExplosion(p, water);
+    if (!water) { terrain.scorchColors(p.x, p.z, 11); terrain.crater(p.x, p.z, 6, 1.6); }
+    houseLosses(terrain.burn(p.x, p.z, 0, 8));
+    killFlash(enemies.blast(p, 17, 5, 9));
+    if (first || Math.random() < 0.25) sound.play('pop', toWorld(p), 0.5);
+    return;
   }
-  const k = enemies.blast(p, LETHAL_RADIUS);
+  if (ammo === 'nuke') {
+    effects.nuke(p);
+    if (!water) terrain.crater(p.x, p.z, NUKE.crater, NUKE.craterDepth);
+    terrain.scorchColors(p.x, p.z, NUKE.trees);
+    nukes.push({ p: p.clone(), t: 0, r: 0 });
+    flashLight = 1;
+    sound.play('nuke', toWorld(p), 2.5);
+    for (const o of ctrls) pulse(o, 1, 600);
+    showFlash('UDERZENIE ATOMOWE', 3, '#ff5050');
+    return;
+  }
+  if (ammo === 'fire') {
+    effects.explosion(p, water);
+    if (!water) {
+      effects.incendiary(p, AMMO.fire.radius, AMMO.fire.burnTime);
+      terrain.scorchColors(p.x, p.z, AMMO.fire.radius * 1.1);
+      terrain.crater(p.x, p.z, 9, 2);
+    }
+    houseLosses(terrain.burn(p.x, p.z, 0, AMMO.fire.radius * 0.8));
+    killFlash(enemies.blast(p, 20, 6, 14));
+    sound.play(water ? 'splash' : 'boom', toWorld(p), 0.8);
+    return;
+  }
+  effects.explosion(p, water);
+  houseLosses(terrain.scorch(p.x, p.z, LETHAL_RADIUS * 0.8));
+  if (!water) terrain.crater(p.x, p.z);
+  killFlash(enemies.blast(p, LETHAL_RADIUS));
   sound.play(water ? 'splash' : 'boom', toWorld(p), 1);
-  if (k > 0) showFlash(k === 1 ? 'Trafiony 1 żołnierz' : `Trafionych: ${k}!`, 1.8, '#ffb4a8');
   for (const o of ctrls) pulse(o, 0.2, 35);
+};
+enemies.onTankDestroyed = (s) => {
+  const p = new THREE.Vector3(s.x, terrain.heightAt(s.x, s.z) + 6, s.z);
+  effects.burst(p);
+  effects.addSmoker(p, 25);
 };
 enemies.onHouseDestroyed = (h) => {
   const p = new THREE.Vector3(h.x, h.y + 6, h.z);
@@ -301,10 +363,13 @@ function pollXRInput(dt) {
       if (up(4)) endArea();
       if (down(5)) toggleMenu();
       if (down(3)) toggleLock();
-      if (Math.abs(ay) > 0.25) setAngle(OPTS.angle - ay * dt * 25);
+      if (Math.abs(ay) > 0.25 && Math.abs(ax) < 0.6) setAngle(OPTS.angle - ay * dt * 25);
+      // prawa gałka w bok: zmiana amunicji (pojedyncze pchnięcie)
+      if (Math.abs(ax) > 0.75 && Math.abs(ay) < 0.5 && !o.flick) { o.flick = true; setAmmo(OPTS.ammo + (ax > 0 ? 1 : -1)); }
+      if (Math.abs(ax) < 0.35) o.flick = false;
     } else if (o.hand === 'left') {
       if (down(4)) placeTable();
-      if (down(5)) newGame();
+      if (down(5)) nextWave();
       if (Math.abs(ax) > 0.2 || Math.abs(ay) > 0.2) {
         const pivot = aim ? aim.world : tableRoot.getWorldPosition(new THREE.Vector3());
         table.nudge(pivot, Math.exp(-ay * dt * 1.4), -ax * dt * 1.6);
@@ -348,7 +413,9 @@ window.addEventListener('keydown', (e) => {
   if (k === 'escape') { lock = null; drawing = null; }
   if (k === 'w' || k === 'arrowup') { setAngle(OPTS.angle + 5); saveOpts(); }
   if (k === 's' || k === 'arrowdown') { setAngle(OPTS.angle - 5); saveOpts(); }
-  if (k === 'n' || k === 'y') newGame();
+  if (k === 'n') newGame();
+  if (k === 'f' || k === 'y') nextWave();
+  if (['1', '2', '3', '4'].includes(k)) setAmmo(Number(k) - 1);
   if (k === 'o' || k === 'b') toggleMenu();
   if (k === 'r' || k === 'x') resetDesktopView();
 });
@@ -504,10 +571,12 @@ function hudState() {
   let msg = '', msgColor = '#ffe9a0';
   if (gameOver) { msg = 'WIOSKA SPALONA — Y: nowa gra'; msgColor = '#ff8a7a'; }
   else if (flash.until > clockT) { msg = flash.text; msgColor = flash.color; }
-  else if (!enemies.waveActive) msg = `Fala ${enemies.wave + 1} za ${Math.ceil(enemies.waveTimer)} s`;
+  else if (enemies.waveTimer < 30) msg = `Fala ${enemies.wave + 1} za ${Math.ceil(enemies.waveTimer)} s`;
   const mode = drawing ? 'wyznaczanie obszaru' : lock ? (lock.type === 'area' ? 'OBSZAR' : 'CEL ZABLOKOWANY') : 'celowanie';
   return {
-    wave: enemies.wave, kills: enemies.kills, alive: enemies.aliveCount,
+    wave: enemies.wave, kills: enemies.kills, alive: enemies.aliveCount, tanks: enemies.tankCount, tankKills: enemies.tankKills,
+    ammo: AMMO[ammoKey()].name, ammoColor: AMMO[ammoKey()].color,
+    nukeCd: ammoKey() === 'nuke' ? Math.ceil(battery.nukeCooldown) : 0,
     homeAlive: terrain.homeAlive(), homeTotal: terrain.home.houses.length,
     angle: Math.round(OPTS.angle), mode, continuous: battery.continuous,
     guns: battery.guns.map((g) => Math.round((1 - g.reload / battery.reloadTime(g)) * 10) / 10),
@@ -542,6 +611,24 @@ renderer.setAnimationLoop(() => {
     gameOver = true;
     battery.continuous = false;
   }
+  // fala uderzeniowa: niszczy wszystko w pierścieniu, który właśnie przeszła
+  for (let i = nukes.length - 1; i >= 0; i--) {
+    const n = nukes[i];
+    n.t += dt;
+    const r = shockRadius(n.t, NUKE.shockMax);
+    const k = enemies.shock(n.p, n.r, Math.min(r, NUKE.kill));
+    if (n.r < NUKE.houses) houseLosses(terrain.burn(n.p.x, n.p.z, n.r, Math.min(r, NUKE.trees)));
+    if (k > 0) killFlash(k);
+    n.r = r;
+    if (n.t > 4) nukes.splice(i, 1);
+  }
+  // fire zones (zapalająca)
+  for (const z of effects.fireZones) {
+    const k = enemies.burn(z.p, z.R, dt);
+    if (k > 0) killFlash(k);
+  }
+  flashLight = Math.max(0, flashLight - dt * 0.8);
+  hemi.intensity = 1.6 * (1 + 6 * flashLight * flashLight);
   effects.update(dt);
   terrain.update();
   updateSun();

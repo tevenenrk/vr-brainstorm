@@ -1,10 +1,11 @@
 # Stół Artyleryjski VR (Meta Quest 3 / 3S)
 
 Symulator WebXR: przed Tobą lewituje prostokątna platforma, a na niej miniaturowy kawałek
-świata 1 km × 4 km (skala 1:2000, czyli 0,5 m × 2 m). Są tam pagórki, lasy, rzeka z trzema
-mostami, jezioro, stawy i pola. Przy bliższej krawędzi stoją Twoje działa, a **za nimi
-Twoja wioska**. Z dalekiego końca nadciągają fale żołnierzy. Maszerują do mostów, a po
-przejściu rzeki palą domy we wiosce. Gra kończy się, gdy spłonie cała wioska.
+świata 1 km × 4 km (skala 1:2000, czyli 0,5 m × 2 m). Są tam pagórki, lasy, jezioro, stawy
+i pola. Przy bliższej krawędzi stoją Twoje działa, a **za nimi Twoja wioska**. Z dalekiego
+końca nadciągają fale piechoty i **czołgów**, omijając wodę, i palą domy we wiosce. Gra kończy
+się, gdy spłonie cała wioska. Kolejną falę możesz wysłać w każdej chwili, nawet gdy
+poprzednia jeszcze trwa.
 
 Nie trzeba niczego budować ani instalować. To czysty HTML i JavaScript (Three.js jest
 dołączony w `vendor/`), który działa w przeglądarce Meta Quest.
@@ -17,6 +18,7 @@ dołączony w `vendor/`), który działa w przeglądarce Meta Quest.
 | **Spust** | salwa ze wszystkich gotowych dział |
 | **Spust 2× szybko** | ogień ciągły: każde działo strzela, gdy tylko się załaduje (kolejny spust = stop) |
 | **Prawa gałka ↑/↓** | kąt lufy 15°–85° (im wyżej, tym bardziej pocisk spada z góry) |
+| **Prawa gałka ←/→** | zmiana amunicji |
 | **Klik prawej gałki** | zablokuj / odblokuj cel w miejscu |
 | **Trzymaj A i przesuń promień** | wyznacz prostokątny obszar ostrzału (pociski spadają losowo w obszarze) |
 | **A krótko** | usuń obszar |
@@ -25,18 +27,32 @@ dołączony w `vendor/`), który działa w przeglądarce Meta Quest.
 | **Grip, obie ręce** | skalowanie (0,15× – 25×), obrót i przesuwanie |
 | **Lewa gałka** | obrót platformy (←/→) i zoom (↑/↓) wokół punktu, w który celujesz |
 | **X** | ustaw platformę przed sobą |
-| **Y** | nowa gra |
+| **Y** | wyślij kolejną falę (nawet gdy poprzednia trwa) |
 
 Na lewym kontrolerze jest panel z falą, liczbą trafień, stanem wioski, kątem lufy,
 paskami ładowania każdego działa i odległością/czasem lotu do celu. Menu pojawia się
 w tym samym miejscu.
+
+### Amunicja
+| Rodzaj | Działanie |
+|---|---|
+| **Odłamkowo-burząca** | wybuch o promieniu 40 m i lej w ziemi. Niszczy czołg przy bliskim trafieniu, dalsze tylko go uszkadza. |
+| **Kasetowa** | rozrywa się ok. 140 m nad celem i rozrzuca 18 podpocisków w promieniu ~65 m. Świetna na piechotę, słaba na czołgi. |
+| **Zapalająca** | rozprysk płonących odłamków i strefa ognia (50 m, 14 s). Pali drzewa i domy, zabija piechotę w ogniu i powoli niszczy czołgi. |
+| **Głowica atomowa** | strzela tylko jedno działo (środkowe), potem 25 s przerwy. Wybuch to błysk, kula ognia, **grzyb atomowy** i **fala uderzeniowa**. Fala rozchodzi się po terenie i niszczy piechotę, czołgi, drzewa i domy do ok. 450–520 m. Zostawia ogromny lej. |
+
+Czołgi mają 3 punkty wytrzymałości. Uszkodzone jaśnieją, a zniszczone zostają jako dymiące wraki.
+Czołgi palą domy z dystansu i szybciej niż piechota.
 
 ### Opcje (menu)
 - **liczba dział:** 1–8;
 - **czas ładowania:** każde działo ma swój, ±15% od wartości z menu;
 - **kąt lufy;**
 - **szybkość pocisków:** 25%–300%;
-- **trudność.**
+- **trudność;**
+- **amunicja.**
+
+W menu są też przyciski **Następna fala** i **Nowa gra**.
 
 Ustawienia są zapamiętywane w przeglądarce.
 
@@ -50,8 +66,6 @@ Kolory toru:
 ### Zniszczenia
 - Każdy pocisk zostawia **lej** (wgłębienie z wałem ziemi) i osmalony teren.
 - Pociski palą drzewa i burzą domy, także Twoje, więc uważaj przy ostrzale wioski.
-- 3 trafienia w most go niszczą. Wróg szuka wtedy innego mostu, a gdy żadnego nie ma,
-  przechodzi rzekę w bród (wolno).
 
 Tryby:
 - **Wejdź w VR:** wirtualny pokój.
@@ -64,6 +78,8 @@ Tryby:
 - `Shift` + przeciągnięcie: obszar ostrzału;
 - `L`: zablokuj cel (`Esc` odblokowuje);
 - `W` / `S`: kąt lufy;
+- `1`–`4`: amunicja (odłamkowa, kasetowa, zapalająca, atomowa);
+- `F`: następna fala;
 - `O`: opcje;
 - `N`: nowa gra;
 - przeciąganie: obrót kamery, kółko: zoom.
@@ -91,11 +107,11 @@ Potem otwórz na Queście `http://localhost:8000` (localhost traktowany jest jak
 - `?shadows=0`: wyłącza cienie, jeśli brakuje płynności.
 
 ## Struktura
-- `src/config.js`: stałe (skala, balistyka, promień rażenia, kratery, mosty) i opcje z menu.
-- `src/terrain.js`: generowanie terenu, wody, lasu, wiosek i mostów, przecięcie promienia z terenem, kratery i zniszczenia.
+- `src/config.js`: stałe (skala, balistyka, amunicja, kratery) i opcje z menu.
+- `src/terrain.js`: generowanie terenu, wody, lasu i wiosek, przecięcie promienia z terenem, kratery i zniszczenia.
 - `src/artillery.js`: modele dział, rozwiązanie balistyczne (zadany kąt lufy), podgląd toru, obszar ostrzału, ogień ciągły i pociski.
-- `src/enemies.js`: fale żołnierzy, marsz przez mosty z omijaniem wody, atak na wioskę i trafienia.
-- `src/effects.js`: wybuchy, dym, rozbryzgi i dźwięk przestrzenny (generowany proceduralnie).
+- `src/enemies.js`: fale piechoty i czołgów, marsz z omijaniem wody, atak na wioskę i obrażenia.
+- `src/effects.js`: wybuchy, dym, ogień, grzyb atomowy, fala uderzeniowa i dźwięk przestrzenny (generowany proceduralnie).
 - `src/table.js`: chwytanie, obracanie i skalowanie platformy jedną albo dwiema rękami.
 - `src/hud.js`: panel na nadgarstku i menu opcji.
 - `src/main.js`: scena, sesja XR, kontrolery, sterowanie na komputerze i pętla gry.

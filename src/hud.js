@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { DIFFICULTY_NAMES } from './config.js';
+import { DIFFICULTY_NAMES, AMMO, AMMO_ORDER } from './config.js';
 
 // Panel rysowany na canvasie: tekstura w VR, element HTML na komputerze.
 export class CanvasPanel {
@@ -36,7 +36,7 @@ export class CanvasPanel {
 }
 
 export class Hud extends CanvasPanel {
-  constructor() { super(640, 500, 0.17); }
+  constructor() { super(640, 540, 0.17); }
 
   draw(s) {
     const key = JSON.stringify(s);
@@ -51,8 +51,9 @@ export class Hud extends CanvasPanel {
     c.fillText(`☠ ${s.kills}`, W - 30, 62);
     c.textAlign = 'left';
 
-    c.font = '30px system-ui, sans-serif'; c.fillStyle = '#b9d6bd';
-    c.fillText(`Wróg na mapie: ${s.alive}`, 30, 106);
+    c.font = '27px system-ui, sans-serif'; c.fillStyle = '#b9d6bd';
+    c.fillText(`Piechota: ${s.alive}  ·  Czołgi: ${s.tanks}  ·  zniszczone: ${s.tankKills}`, 30, 106);
+    c.font = '30px system-ui, sans-serif';
     c.fillStyle = s.homeAlive < s.homeTotal / 2 ? '#ff9a8a' : '#b9d6bd';
     c.fillText(`Wioska: ${s.homeAlive} / ${s.homeTotal} domów`, 30, 144);
     c.fillStyle = '#b9d6bd';
@@ -69,6 +70,8 @@ export class Hud extends CanvasPanel {
     });
 
     c.font = 'bold 30px system-ui, sans-serif';
+    c.fillStyle = s.ammoColor;
+    c.fillText(`▶ ${s.ammo}${s.nukeCd ? `  (gotowa za ${s.nukeCd} s)` : ''}`, 30, 262);
     const colors = { ok: '#7dffb0', blocked: '#ffa53a', range: '#ff6a5a', none: '#8aa08e' };
     c.fillStyle = colors[s.status] || '#fff';
     const txt = {
@@ -77,20 +80,20 @@ export class Hud extends CanvasPanel {
       range: 'POZA ZASIĘGIEM — zmniejsz kąt',
       none: 'Wyceluj w teren na stole',
     }[s.status];
-    c.fillText(txt, 30, 272);
+    c.fillText(txt, 30, 304);
 
     if (s.continuous) {
       c.fillStyle = '#ff7a64'; c.font = 'bold 32px system-ui, sans-serif';
-      c.fillText('● OGIEŃ CIĄGŁY (spust = stop)', 30, 318);
+      c.fillText('● OGIEŃ CIĄGŁY (spust = stop)', 30, 350);
     }
     c.font = 'bold 32px system-ui, sans-serif';
     c.fillStyle = s.msgColor || '#ffe9a0';
-    if (s.msg) c.fillText(s.msg, 30, 364);
+    if (s.msg) c.fillText(s.msg, 30, 396);
 
     c.font = '22px system-ui, sans-serif'; c.fillStyle = '#7f9c84';
-    c.fillText('Spust: salwa · 2× spust: ogień ciągły · B: menu', 30, 420);
-    c.fillText('Prawa gałka ↑↓ kąt · klik gałki: zablokuj cel', 30, 452);
-    c.fillText('Trzymaj A i przesuń: obszar ostrzału', 30, 484);
+    c.fillText('Spust: salwa · 2× spust: ogień ciągły · B: menu', 30, 448);
+    c.fillText('Prawa gałka ↑↓ kąt · ←→ amunicja · klik: blokada', 30, 480);
+    c.fillText('Trzymaj A i przesuń: obszar · Y: następna fala', 30, 512);
     this.tex.needsUpdate = true;
   }
 }
@@ -98,7 +101,7 @@ export class Hud extends CanvasPanel {
 // Menu opcji z przyciskami (klik promieniem lub myszą)
 export class Menu extends CanvasPanel {
   constructor() {
-    super(720, 940, 0.2);
+    super(720, 1030, 0.2);
     this.buttons = [];
     this.hover = -1;
     this.mesh.visible = false;
@@ -142,22 +145,30 @@ export class Menu extends CanvasPanel {
     row(y, 'Czas ładowania', `${o.reload.toFixed(1)} s`, 'reload'); y += 76;
     row(y, 'Kąt lufy', `${Math.round(o.angle)}°`, 'angle'); y += 76;
     row(y, 'Szybkość pocisków', `${Math.round(o.speed * 100)}%`, 'speed'); y += 76;
-    row(y, 'Trudność', DIFFICULTY_NAMES[o.difficulty], 'diff'); y += 92;
+    row(y, 'Trudność', DIFFICULTY_NAMES[o.difficulty], 'diff'); y += 76;
+    c.fillStyle = '#c9dccc'; c.font = '30px system-ui, sans-serif';
+    c.fillText('Amunicja', 34, y + 40);
+    btn(190, y, 70, 58, '−', 'ammo-');
+    const am = AMMO[AMMO_ORDER[o.ammo]];
+    c.fillStyle = am.color; c.font = 'bold 28px system-ui, sans-serif'; c.textAlign = 'center';
+    c.fillText(am.name, 440, y + 40); c.textAlign = 'left';
+    btn(620, y, 70, 58, '+', 'ammo+'); y += 92;
 
-    btn(34, y, 316, 66, 'Nowa gra', 'new', '#5a3a2a');
-    btn(370, y, 316, 66, 'Stół przed siebie', 'place'); y += 84;
-    btn(34, y, 652, 66, 'Zamknij menu', 'close'); y += 104;
+    btn(34, y, 316, 66, 'Następna fala', 'wave', '#5a2a2a');
+    btn(370, y, 316, 66, 'Nowa gra', 'new', '#5a3a2a'); y += 84;
+    btn(34, y, 316, 66, 'Stół przed siebie', 'place');
+    btn(370, y, 316, 66, 'Zamknij menu', 'close'); y += 104;
 
     c.font = '22px system-ui, sans-serif'; c.fillStyle = '#9fb8a4';
     const help = [
       'Spust — salwa z gotowych dział',
       '2× spust szybko — ogień ciągły (spust — stop)',
-      'Prawa gałka ↑↓ — kąt lufy (tor bardziej z góry)',
+      'Prawa gałka ↑↓ — kąt lufy · ←→ — amunicja',
       'Klik prawej gałki — zablokuj / odblokuj cel',
       'Trzymaj A + przesuń — obszar ostrzału; A krótko — usuń',
       'Grip — chwyć stół, oburącz — skaluj',
       'Lewa gałka — obrót / zoom stołu',
-      'X — stół przed siebie · Y — nowa gra',
+      'X — stół przed siebie · Y — następna fala',
     ];
     help.forEach((l, i) => c.fillText(l, 34, y + i * 31));
     this.tex.needsUpdate = true;

@@ -20,13 +20,23 @@ export const DISPERSION = {         // rozrzut pojedynczego strzału
   velocity: 0.004,
 };
 export const ANGLE_MIN = 15, ANGLE_MAX = 85;
+
+// Rodzaje amunicji
+export const AMMO = {
+  he: { name: 'Odłamkowo-burząca', radius: 40, color: '#7dffb0' },
+  cluster: { name: 'Kasetowa', radius: 65, color: '#ffe36a', bomblets: 18 },
+  fire: { name: 'Zapalająca', radius: 50, color: '#ff9a40', burnTime: 14 },
+  nuke: { name: 'Głowica atomowa', radius: 450, color: '#ff5050' },
+};
+export const AMMO_ORDER = ['he', 'cluster', 'fire', 'nuke'];
+export const NUKE_COOLDOWN = 25;   // s — atomówkę strzela tylko jedno działo
+export const NUKE = { kill: 520, trees: 430, houses: 450, shockMax: 760, crater: 70, craterDepth: 24 };
 export const GUNS_MAX = 8;
 
 // Rozmieszczenie
 export const BATTERY_Z = 1530;      // linia dział
 export const HOME = { z0: 1690, z1: 1955, count: 14 }; // wioska za działami
 export const SPAWN_Z = -1940;       // wróg wychodzi z dalekiego końca
-export const BRIDGES_X = [-345, -15, 315];
 
 // Domyślne położenie stołu (metry rzeczywiste, układ local-floor)
 export const TABLE_DEFAULT = {
@@ -46,6 +56,7 @@ const DEFAULT_OPTS = {
   angle: 60,         // kąt podniesienia lufy, stopnie
   speed: 1,          // mnożnik szybkości pocisków (1 = domyślnie)
   difficulty: 1,
+  ammo: 0,           // indeks w AMMO_ORDER
 };
 export const OPTS = { ...DEFAULT_OPTS };
 try {
@@ -59,3 +70,4 @@ export function saveOpts() {
 // Czas gry pocisku: ile sekund "fizycznych" mija na sekundę rzeczywistą.
 // 7 => tor stromy na ~3 km trwa ok. 4–5 s (2x dłużej niż płaski tor w poprzedniej wersji).
 export const shellTimeScale = () => 7 * OPTS.speed;
+export const ammoKey = () => AMMO_ORDER[OPTS.ammo] || 'he';

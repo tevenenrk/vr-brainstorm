@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {
   G, MAX_V, LETHAL_RADIUS, DISPERSION, BATTERY_Z, MAP_W, MAP_D, BASE_Y, WATER_LEVEL,
-  OPTS, shellTimeScale,
+  OPTS, shellTimeScale, AMMO, ammoKey, NUKE_COOLDOWN,
 } from './config.js';
 
 const DEG = Math.PI / 180;
@@ -46,6 +46,26 @@ export function traceTrajectory(terrain, P, V, maxT = 160) {
   }
   return { hit: false, t: maxT, point: pos(maxT, p).clone() };
 }
+
+// moment rozerwania pocisku kasetowego: ~140 m nad terenem na opadającej części toru
+function burstTime(terrain, P, V, tr) {
+  const alt = (t) => {
+    const x = P.x + V.x * t, z = P.z + V.z * t, y = P.y + V.y * t - 0.5 * G * t * t;
+    return y - terrain.surfaceAt(x, z);
+  };
+  const H = 140;
+  let a = Math.max(V.y / G, 0), b = tr.t;
+  if (a >= b || alt(a) <= H) return a + (b - a) * 0.5;
+  for (let k = 0; k < 20; k++) { const m = (a + b) / 2; if (alt(m) > H) a = m; else b = m; }
+  return b;
+}
+
+const SHELL_MATS = {
+  he: new THREE.MeshBasicMaterial({ color: 0xffd27a, toneMapped: false }),
+  cluster: new THREE.MeshBasicMaterial({ color: 0xfff27a, toneMapped: false }),
+  fire: new THREE.MeshBasicMaterial({ color: 0xff7a30, toneMapped: false }),
+  nuke: new THREE.MeshBasicMaterial({ color: 0xff3030, toneMapped: false }),
+};
 
 const MATS = {
   olive: new THREE.MeshLambertMaterial({ color: 0x55602c }),
@@ -196,9 +216,15 @@ export class Battery {
     mapGroup.add(cross);
 
     const shellGeo = new THREE.SphereGeometry(3, 8, 6);
-    const shellMat = new THREE.MeshBasicMaterial({ color: 0xffd27a, toneMapped: false });
     this.shellPool = [];
-    for (let i = 0; i < 64; i++) { const m = new THREE.Mesh(shellGeo, shellMat); m.visible = false; mapGroup.add(m); this.shellPool.push(m); }
+    for (let i = 0; i < 64; i++) { const m = new THREE.Mesh(shellGeo, SHELL_MATS.he); m.visible = false; mapGroup.add(m); this.shellPool.push(m); }
+    // podpociski kasetowe
+    const bGeo = new THREE.SphereGeometry(1.6, 6, 4);
+    this.bombPool = [];
+    for (let i = 0; i < 240; i++) { const m = new THREE.Mesh(bGeo, SHELL_MATS.cluster); m.visible = false; mapGroup.add(m); this.bombPool.push(m); }
+    this.bomblets = [];
+    this.nukeCooldown = 0;
+    this.onBurst = null;
 
     this.preview = null;
     this.phase = 0;
@@ -297,7 +323,7 @@ export class Battery {
     for (let i = this.pending.length - 1; i >= 0; i--) {
       const pd = this.pending[i];
       pd.delay -= dt;
-      if (pd.delay <= 0) { this.pending.splice(i, 1); this.shoot(pd.gun, pd.spec); }
+      if (pd.delay <= 0) { this.pending.splice(i, 1); this.shoot(pd.gun, pd.spec, pd.ammo); }
     }
 
     const ts = shellTimeScale();
@@ -311,18 +337,40 @@ export class Battery {
       s.mesh.visible = s.t > BARREL_LEN / s.V.length();
       s.trailAcc += dt;
       if (s.trailAcc > 0.035 && s.mesh.visible) { s.trailAcc = 0; this.effects.trail(tmp); }
+      if (s.burstT !== undefined && s.t >= s.burstT) {
+        s.mesh.visible = false;
+        this.shellPool.push(s.mesh);
+        this.shells.splice(i, 1);
+        this.burst(tmp.clone(), s.tr.point);
+        continue;
+      }
       if (s.t >= s.tr.t) {
         s.mesh.visible = false;
         this.shellPool.push(s.mesh);
         this.shells.splice(i, 1);
-        if (s.tr.hit && this.onImpact) this.onImpact(s.tr.point, s.tr.water);
+        if (s.tr.hit && this.onImpact) this.onImpact(s.tr.point, s.tr.water, s.ammo);
       }
     }
+    // podpociski kasetowe
+    for (let i = this.bomblets.length - 1; i >= 0; i--) {
+      const b = this.bomblets[i];
+      b.t += dt * ts;
+      const k = Math.min(1, b.t / b.T);
+      b.mesh.position.set(b.B.x + (b.I.x - b.B.x) * k, b.B.y + (b.I.y - b.B.y) * k * k, b.B.z + (b.I.z - b.B.z) * k);
+      if (k >= 1) {
+        b.mesh.visible = false;
+        this.bombPool.push(b.mesh);
+        this.bomblets.splice(i, 1);
+        if (this.onImpact) this.onImpact(b.I, this.terrain.heightAt(b.I.x, b.I.z) < WATER_LEVEL, 'bomblet', b.first);
+      }
+    }
+    this.nukeCooldown = Math.max(0, this.nukeCooldown - dt);
   }
 
   drawPreview(locked) {
     const pv = this.preview;
-    const col = pv.status === 'ok' ? 0x7dffb0 : pv.status === 'blocked' ? 0xffa53a : 0xff4a4a;
+    let col = pv.status === 'ok' ? 0x7dffb0 : pv.status === 'blocked' ? 0xffa53a : 0xff4a4a;
+    if (pv.status === 'ok' && ammoKey() !== 'he') col = new THREE.Color(AMMO[ammoKey()].color).getHex();
     this.dotMat.color.setHex(col);
     const m = new THREE.Matrix4();
     const p = new THREE.Vector3();
@@ -361,7 +409,8 @@ export class Battery {
       this.rect.mesh.visible = false; this.fill.visible = false;
       if (pv.tr.hit) {
         this.ring.mat.color.setHex(col);
-        this.ring.set(this.terrain, ringPoints(pv.tr.point, LETHAL_RADIUS, 57), 2.2);
+        const R = AMMO[ammoKey()].radius || LETHAL_RADIUS;
+        this.ring.set(this.terrain, ringPoints(pv.tr.point, R, 57), R > 200 ? 6 : 2.2);
       } else this.ring.mesh.visible = false;
     }
     if (pv.tr.hit) {
@@ -375,24 +424,55 @@ export class Battery {
     this.cross.position.copy(pv.target).add(new THREE.Vector3(0, 1.5, 0));
   }
 
+  // rozerwanie pocisku kasetowego nad celem
+  burst(B, center) {
+    const n = AMMO.cluster.bomblets;
+    for (let k = 0; k < n; k++) {
+      const mesh = this.bombPool.pop();
+      if (!mesh) break;
+      const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * (AMMO.cluster.radius - 5);
+      const x = Math.max(-MAP_W / 2, Math.min(MAP_W / 2, center.x + Math.cos(a) * r));
+      const z = Math.max(-MAP_D / 2, Math.min(MAP_D / 2, center.z + Math.sin(a) * r));
+      const I = new THREE.Vector3(x, this.terrain.surfaceAt(x, z), z);
+      const T = Math.sqrt(2 * Math.max(10, B.y - I.y) / G) * (0.85 + Math.random() * 0.3);
+      mesh.visible = true;
+      mesh.position.copy(B);
+      this.bomblets.push({ B: B.clone(), I, T, t: 0, mesh, first: k === 0 });
+    }
+    if (this.onBurst) this.onBurst(B);
+  }
+
   readyCount() { return this.guns.filter((g) => g.reload <= 0).length; }
 
   // salwa z gotowych dział
   fire(spec) {
     if (!spec) return 0;
+    const ammo = ammoKey();
     let delay = 0, n = 0;
+    if (ammo === 'nuke') {
+      // atomówka: strzela tylko jedno działo (najbliżej środka baterii)
+      if (this.nukeCooldown > 0) return 0;
+      const ready = this.guns.filter((g) => g.reload <= 0 && !this.pending.some((p) => p.gun === g));
+      if (!ready.length) return 0;
+      ready.sort((a, b) => Math.abs(a.root.position.x) - Math.abs(b.root.position.x));
+      const gun = ready[0];
+      gun.reload = this.reloadTime(gun) * 2;
+      this.nukeCooldown = NUKE_COOLDOWN;
+      this.pending.push({ gun, spec, delay: 0, ammo });
+      return 1;
+    }
     for (const gun of this.guns) {
       if (gun.reload > 0 || this.pending.some((p) => p.gun === gun)) continue;
       gun.reload = this.reloadTime(gun);
-      this.pending.push({ gun, spec, delay });
+      this.pending.push({ gun, spec, delay, ammo });
       delay += 0.12 + Math.random() * 0.1;
       n++;
     }
     return n;
   }
 
-  shoot(gun, spec) {
-    const target = this.pickPoint(spec);
+  shoot(gun, spec, ammo = 'he') {
+    const target = ammo === 'nuke' ? specCenter(this.terrain, spec).clone() : this.pickPoint(spec);
     const P = this.pivotOf(gun);
     const sol = this.solution(P, target);
     const gr = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
@@ -403,7 +483,11 @@ export class Battery {
     const tr = traceTrajectory(this.terrain, P, V);
     const mesh = this.shellPool.pop();
     if (!mesh) return;
-    this.shells.push({ P, V, tr, t: 0, mesh, trailAcc: 0 });
+    mesh.material = SHELL_MATS[ammo];
+    mesh.scale.setScalar(ammo === 'nuke' ? 2.2 : 1);
+    const shell = { P, V, tr, t: 0, mesh, trailAcc: 0, ammo };
+    if (ammo === 'cluster') shell.burstT = burstTime(this.terrain, P, V, tr);
+    this.shells.push(shell);
     gun.recoilT = 0;
     const dir = V.clone().normalize();
     const muzzle = P.clone().addScaledVector(dir, BARREL_LEN);
@@ -416,6 +500,9 @@ export class Battery {
     this.continuous = false;
     for (const s of this.shells) { s.mesh.visible = false; this.shellPool.push(s.mesh); }
     this.shells.length = 0;
+    for (const b of this.bomblets) { b.mesh.visible = false; this.bombPool.push(b.mesh); }
+    this.bomblets.length = 0;
+    this.nukeCooldown = 0;
     for (const g of this.guns) g.reload = 0;
   }
 }
