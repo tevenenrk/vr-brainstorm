@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stół Artyleryjski VR</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #1d262c; overflow: hidden; font-family: system-ui, sans-serif; color: #e4efe6; }
+    #app canvas { display: block; }
+    #panel {
+      position: fixed; left: 16px; top: 16px; max-width: 360px;
+      background: rgba(14, 20, 16, 0.86); border: 1px solid rgba(160, 220, 170, 0.35);
+      border-radius: 14px; padding: 16px 18px; box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+    }
+    #panel h1 { margin: 0 0 6px; font-size: 20px; color: #f0e2b8; }
+    #panel p { margin: 6px 0; font-size: 13px; line-height: 1.45; color: #b9d6bd; }
+    .btns { display: flex; gap: 8px; margin: 12px 0 6px; flex-wrap: wrap; }
+    button {
+      font: 600 15px system-ui, sans-serif; padding: 10px 14px; border-radius: 10px; border: 0;
+      background: #7dffb0; color: #10301c; cursor: pointer;
+    }
+    button.alt { background: #cfe8ff; color: #102233; }
+    button:disabled { background: #39423c; color: #7d8c80; cursor: not-allowed; }
+    #xr-note { color: #ffcf8a; min-height: 1em; }
+    kbd { background: #2c3830; border-radius: 4px; padding: 1px 5px; font-size: 12px; }
+    #hud { position: fixed; right: 16px; top: 16px; }
+    #hud canvas { width: 300px; height: auto; display: block; }
+    body.in-xr #panel, body.in-xr #hud { display: none; }
+    @media (max-width: 700px) { #hud canvas { width: 200px; } #panel { max-width: calc(100% - 250px); } }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/build/three.module.min.js",
+        "three/addons/": "./vendor/three/addons/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="panel">
+    <h1>Stół Artyleryjski</h1>
+    <p>Miniaturowe pole bitwy 1 × 4 km na stole. Twoja bateria stoi przy bliższej krawędzi, wróg nadciąga z daleka.</p>
+    <div class="btns">
+      <button id="btn-vr">Wejdź w VR</button>
+      <button id="btn-ar" class="alt">Mixed Reality</button>
+    </div>
+    <p id="xr-note"></p>
+    <p><b>Na komputerze:</b> klik / <kbd>Spacja</kbd> — ognia, przeciąganie — obrót kamery, kółko — zoom,
+      <kbd>H</kbd> — tor płaski/stromy, <kbd>N</kbd> — nowa gra, <kbd>R</kbd> — reset widoku.</p>
+  </div>
+  <div id="hud"></div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
