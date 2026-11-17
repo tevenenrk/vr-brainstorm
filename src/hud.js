@@ -158,9 +158,9 @@ export class Menu extends CanvasPanel {
     btn(370, y, 316, 66, 'Nowa gra', 'new', '#5a3a2a'); y += 84;
     btn(34, y, 316, 66, 'Stół przed siebie', 'place');
     btn(370, y, 316, 66, 'Zamknij menu', 'close'); y += 84;
-    btn(34, y, 210, 66, 'Katastrofy', 'mode', '#5a3a1a');
-    btn(254, y, 210, 66, 'Stół pinów', 'mode2', '#1a3a5a');
-    btn(474, y, 212, 66, 'Flak', 'mode3', '#3a4a1a'); y += 104;
+    [['Katastrofy', 'mode', '#5a3a1a'], ['Piny', 'mode2', '#1a3a5a'], ['Flak', 'mode3', '#3a4a1a'], ['Bitwa', 'mode4', '#2a3a5a'], ['Bomba', 'mode5', '#6a2a1a']]
+      .forEach(([l, a, c], i) => btn(34 + i * 132, y, 124, 66, l, a, c));
+    y += 104;
 
     c.font = '22px system-ui, sans-serif'; c.fillStyle = '#9fb8a4';
     const help = [

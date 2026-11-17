@@ -8,7 +8,7 @@ import { TableManipulator } from '../table.js';
 import { CanvasPanel } from '../hud.js';
 import { Flak } from './guns.js';
 import { Airforce, Group } from './planes.js';
-import { FlakHud, FlakMenu, FIRE_MODES, VIEWS } from './ui.js';
+import { FlakHud, FlakMenu, FIRE_MODES, VIEWS, MANEUVER } from './ui.js';
 
 const params = new URLSearchParams(location.search);
 const SHADOWS = params.get('shadows') !== '0';
@@ -72,7 +72,8 @@ document.getElementById('hud').appendChild(hud.canvas);
 document.getElementById('menu').appendChild(menu.canvas);
 
 // ---------- stan ----------
-const state = { guns: 12, fire: 0, view: 0, pilot: false, pred: true };
+const state = { guns: 12, fire: 0, view: 0, pilot: false, pred: true, burstR: 75, speed: 1, maneuver: 2 };
+let lastTrig = -10;
 let box = { min: new THREE.Vector3(-150, 420, 300), max: new THREE.Vector3(150, 560, 600) };
 let countdown = null, boomT = 0, contOn = false, wave = 0, waveTimer = 5, clockT = 0, aim = null, menuHover = false;
 let flash = { text: '', until: 0, color: '#9fe8b0' }, selected = null, respawnT = 0, lastGunSound = 0;
@@ -88,7 +89,7 @@ const homeTarget = () => {
 
 flak.onFire = (m) => { if (clockT - lastGunSound > 0.07) { lastGunSound = clockT; sound.play('gun', toWorld(m), 0.35); } };
 flak.onBurst = (p) => {
-  const hits = air.burst(p);
+  const hits = air.burst(p, state.burstR);
   if (Math.random() < 0.5) sound.play('pop', toWorld(p), 0.6);
   if (hits) msg(hits > 1 ? `Trafienia: ${hits}!` : 'Trafienie!', '#ffb4a8');
 };
@@ -120,7 +121,6 @@ function spawnPlayer() {
   g.player = true;
   air.groups.push(g);
   selected = g.leader;
-  if (state.view === 0) state.view = 2;
   msg('Lecisz! Omijaj flak i zrzuć bomby nad wioską', '#ffe08a');
 }
 
@@ -128,7 +128,7 @@ function setRole(pilot) {
   state.pilot = pilot;
   contOn = false; countdown = null;
   for (const g of air.groups) g.player = false;
-  if (pilot) spawnPlayer(); else selected = null;
+  if (pilot) { spawnPlayer(); enterCockpit(); toggleMenu(false); } else { selected = null; exitCockpit(); }
 }
 
 function newGame() {
@@ -143,7 +143,7 @@ function cyclePlane(dir) {
   if (!list.length) return;
   const i = list.indexOf(selected);
   selected = list[((i < 0 ? 0 : i + dir) + list.length) % list.length];
-  if (state.view < 2) state.view = 2;
+  if (state.view < 1) state.view = 1;
 }
 
 function toggleMenu(v) {
@@ -159,7 +159,10 @@ function menuAction(act) {
     case 'fire': state.fire = Number(v); contOn = false; break;
     case 'guns-': case 'guns+':
       state.guns = Math.max(1, Math.min(30, state.guns + (k.endsWith('+') ? 1 : -1))); flak.setCount(state.guns); break;
-    case 'view': state.view = Number(v); if (state.view >= 2 && !selected) cyclePlane(1); break;
+    case 'view': state.view = Number(v); if (state.view >= 1 && !selected) cyclePlane(1); break;
+    case 'burst-': case 'burst+': state.burstR = Math.max(20, Math.min(250, state.burstR + (k.endsWith('+') ? 10 : -10))); flak.burstScale = state.burstR / 75; break;
+    case 'pspeed-': case 'pspeed+': state.speed = Math.max(0.3, Math.min(2.5, Math.round((state.speed + (k.endsWith('+') ? 0.1 : -0.1)) * 10) / 10)); air.speedMult = state.speed; break;
+    case 'man-': case 'man+': state.maneuver = Math.max(0, Math.min(3, state.maneuver + (k.endsWith('+') ? 1 : -1))); air.maneuver = state.maneuver; break;
     case 'plane-': cyclePlane(-1); break;
     case 'plane+': cyclePlane(1); break;
     case 'pred': state.pred = !state.pred; air.showPrediction = state.pred; break;
@@ -181,11 +184,13 @@ function onTrigger() {
     return;
   }
   const mode = FIRE_MODES[state.fire].key;
-  if (mode === 'cont') { contOn = !contOn; msg(contOn ? 'Ogień ciągły: START' : 'Ogień ciągły: STOP'); return; }
+  // ogień ciągły: włącza go tryb "ciągły" albo podwójny spust; kolejny spust zatrzymuje
+  if (contOn) { contOn = false; lastTrig = -10; msg('Ogień ciągły: STOP'); return; }
+  if (mode === 'cont' || clockT - lastTrig < 0.4) { contOn = true; lastTrig = -10; msg('OGIEŃ CIĄGŁY — spust zatrzymuje', '#ff8a7a'); return; }
+  lastTrig = clockT;
   const T = flak.fire(box, mode);
   if (T === null) { msg(flak.ready().length ? 'Strefa poza zasięgiem dział' : 'Działa się ładują…', '#e8a040'); return; }
   countdown = T;
-  if (state.view === 1) shellView.hold = 0;
 }
 
 // ---------- strefa wybuchów (prostopadłościan) ----------
@@ -252,20 +257,11 @@ const monitor = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.1375), new THREE.
 const monitorFrame = new THREE.Mesh(new THREE.PlaneGeometry(0.23, 0.1475), new THREE.MeshBasicMaterial({ color: 0x1a1d16 }));
 monitorFrame.position.z = -0.001; monitor.add(monitorFrame);
 monitor.visible = false;
-const shellView = { shell: null, hold: 0, pos: new THREE.Vector3(), look: new THREE.Vector3() };
 function updatePip(dt) {
   const view = VIEWS[state.view].key;
-  if (view === 'none') return false;
+  if (view === 'none' || state.pilot) return false;
   const eye = new THREE.Vector3(), look = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
-  if (view === 'shell') {
-    const s = flak.lastShell;
-    if (s && s !== shellView.shell) { shellView.shell = s; shellView.hold = 0; }
-    if (!s) return false;
-    const dir = new THREE.Vector3(s.V.x, s.V.y - 9.81 * Math.min(s.t, s.T), s.V.z).normalize();
-    if (!s.burst) { shellView.pos.copy(s.pos).addScaledVector(dir, -22).add(new THREE.Vector3(0, 5, 0)); shellView.look.copy(s.pos).addScaledVector(dir, 80); }
-    else { shellView.hold += dt; shellView.look.copy(s.pos); }
-    eye.copy(shellView.pos); look.copy(shellView.look);
-  } else {
+  {
     if (!selected || selected.state === 'gone') { cyclePlane(1); if (!selected) return false; }
     const p = selected, f = p.forward(new THREE.Vector3()), q = p.quaternion(new THREE.Quaternion());
     if (view === 'chase') { eye.copy(p.pos).addScaledVector(f, -95).add(new THREE.Vector3(0, 28, 0)); look.copy(p.pos).addScaledVector(f, 40); }
@@ -277,7 +273,7 @@ function updatePip(dt) {
   pipCam.lookAt(toWorld(look));
   pipCam.near = 0.00005 * tableRoot.scale.x; pipCam.updateProjectionMatrix();
   pipCam.updateMatrixWorld();
-  for (const p of air.planes) p.selected = p === selected && view !== 'shell';
+  for (const p of air.planes) p.selected = p === selected;
   return true;
 }
 function renderPipToTarget() {
@@ -292,6 +288,63 @@ function renderPipToTarget() {
   renderer.shadowMap.autoUpdate = true;
   renderer.xr.enabled = prevXR;
   monitor.visible = true;
+}
+
+// ---------- widok pilota z kabiny (świat w skali 1:1 przesuwa się wokół Ciebie) ----------
+const cockpit = new THREE.Group();
+{
+  const dark = new THREE.MeshLambertMaterial({ color: 0x23261f }), metal = new THREE.MeshLambertMaterial({ color: 0x4a5040 });
+  const add = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); cockpit.add(o); return o; };
+  add(new THREE.BoxGeometry(0.9, 0.22, 0.28), dark, 0, -0.38, -0.62);
+  for (const [x, c] of [[-0.25, 0xf2f0e0], [0, 0xf2f0e0], [0.25, 0xf2f0e0]]) {
+    const g = add(new THREE.CircleGeometry(0.055, 24), new THREE.MeshBasicMaterial({ color: 0x0c0d0a }), x, -0.3, -0.475);
+    g.add(new THREE.Mesh(new THREE.RingGeometry(0.05, 0.055, 24), new THREE.MeshBasicMaterial({ color: c })));
+  }
+  for (const x of [-0.55, 0.55]) add(new THREE.BoxGeometry(0.04, 0.9, 0.04), metal, x, 0.05, -0.7).rotation.z = x > 0 ? -0.18 : 0.18;
+  add(new THREE.BoxGeometry(1.1, 0.04, 0.04), metal, 0, 0.48, -0.66);
+  add(new THREE.CylinderGeometry(0.02, 0.025, 0.35, 8), dark, 0, -0.55, -0.35).rotation.x = 0.4;
+}
+cockpit.visible = false;
+scene.add(cockpit);
+let saved = null;
+const anchor = { pos: new THREE.Vector3(0, 1.4, 0), yaw: 0 };
+function enterCockpit() {
+  if (saved) return;
+  saved = { pos: tableRoot.position.clone(), quat: tableRoot.quaternion.clone(), scale: tableRoot.scale.x, cam: camera.position.clone(), target: controls.target.clone() };
+  if (renderer.xr.isPresenting) {
+    camera.getWorldPosition(anchor.pos);
+    const f = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion())); f.y = 0;
+    anchor.yaw = f.lengthSq() > 1e-4 ? Math.atan2(-f.x, -f.z) : 0;
+  } else { anchor.pos.set(0, 1.4, 0); anchor.yaw = 0; camera.position.copy(anchor.pos); camera.quaternion.identity(); }
+  cockpit.position.copy(anchor.pos); cockpit.rotation.set(0, anchor.yaw, 0); cockpit.visible = true;
+  tableRoot.scale.setScalar(1 / MAP_SCALE);
+  camera.near = 0.15; camera.far = 16000; camera.updateProjectionMatrix();
+  env.visible = false;
+  scene.background = new THREE.Color(0x8fb2d4); scene.fog = new THREE.Fog(0x8fb2d4, 2500, 11000);
+  sun.castShadow = false;
+}
+function exitCockpit() {
+  if (!saved) return;
+  tableRoot.position.copy(saved.pos); tableRoot.quaternion.copy(saved.quat); tableRoot.scale.setScalar(saved.scale);
+  if (!renderer.xr.isPresenting) { camera.position.copy(saved.cam); controls.target.copy(saved.target); controls.update(); }
+  saved = null;
+  cockpit.visible = false;
+  camera.near = 0.01; camera.far = 200; camera.updateProjectionMatrix();
+  env.visible = !arMode; scene.background = arMode ? null : SKY; scene.fog = arMode ? null : new THREE.Fog(SKY, 10, 45);
+  sun.castShadow = SHADOWS;
+}
+const EYE = { bomber: new THREE.Vector3(0, 1.0, 24), fighter: new THREE.Vector3(0, 1.9, 2.4) };
+function updateCockpit() {
+  if (!saved) return;
+  const g = air.playerGroup(), p = g?.leader;
+  if (!p) return; // czekamy na nowy samolot — świat zastyga
+  const q = p.quaternion(new THREE.Quaternion());
+  const eye = EYE[p.type].clone().multiplyScalar(1.4).applyQuaternion(q).add(p.pos);
+  const seat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), anchor.yaw + Math.PI);
+  const rt = seat.multiply(q.clone().invert());
+  tableRoot.quaternion.copy(rt);
+  tableRoot.position.copy(anchor.pos).sub(eye.applyQuaternion(rt));
+  if (!renderer.xr.isPresenting) { camera.position.copy(anchor.pos); camera.quaternion.identity(); }
 }
 
 // ---------- kontrolery XR ----------
@@ -316,7 +369,7 @@ const ctrls = [0, 1].map((i) => {
   c.addEventListener('connected', (e) => { o.source = e.data; o.hand = e.data.handedness; ray.visible = true; if (!aimCtrl || o.hand === 'right') aimCtrl = o; attachPanels(); });
   c.addEventListener('disconnected', () => { o.source = null; ray.visible = false; table.release(grip); if (aimCtrl === o) aimCtrl = ctrls.find((x) => x.source) || null; attachPanels(); });
   c.addEventListener('selectstart', () => onTrigger());
-  c.addEventListener('squeezestart', () => table.grab(grip));
+  c.addEventListener('squeezestart', () => { if (!state.pilot) table.grab(grip); });
   c.addEventListener('squeezeend', () => table.release(grip));
   return o;
 });
@@ -331,7 +384,7 @@ function pollXRInput(dt) {
     const ax = gp.axes[2] || 0, ay = gp.axes[3] || 0;
     if (o.hand === 'right') {
       if (down(5)) toggleMenu();
-      if (down(3)) state.view = (state.view + 1) % VIEWS.length;
+      if (down(3) && !state.pilot) state.view = (state.view + 1) % VIEWS.length;
       if (state.pilot) { playerInput.turn = Math.abs(ax) > 0.1 ? -ax : 0; playerInput.climb = Math.abs(ay) > 0.1 ? -ay : 0; }
       else {
         // trzymaj A: prostopadłościan rozpięty między końcówkami obu kontrolerów
@@ -345,10 +398,10 @@ function pollXRInput(dt) {
         if (Math.abs(ax) > 0.3) scaleBox(Math.exp(ax * dt * 0.9));
       }
     } else if (o.hand === 'left') {
-      if (down(4)) placeTable();
+      if (down(4) && !state.pilot) placeTable();
       if (down(5)) nextWave();
       if (down(3)) cyclePlane(1);
-      if (Math.abs(ax) > 0.2 || Math.abs(ay) > 0.2) {
+      if (!state.pilot && (Math.abs(ax) > 0.2 || Math.abs(ay) > 0.2)) {
         const pivot = tableRoot.getWorldPosition(new THREE.Vector3());
         table.nudge(pivot, Math.exp(-ay * dt * 1.4), -ax * dt * 1.6);
       }
@@ -453,17 +506,19 @@ resetView();
 window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
 
 // ---------- sesja XR ----------
-let xrFrames = 0;
+let xrFrames = 0, arMode = false, xrPilotPending = false;
 async function startXR(mode) {
   try {
     sound.resume();
     const session = await navigator.xr.requestSession(mode, { optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking'] });
     const ar = mode === 'immersive-ar';
+    arMode = ar;
     env.visible = !ar; scene.background = ar ? null : SKY; scene.fog = ar ? null : new THREE.Fog(SKY, 10, 45);
-    session.addEventListener('end', () => { env.visible = true; scene.background = SKY; scene.fog = new THREE.Fog(SKY, 10, 45); document.body.classList.remove('in-xr'); hud.mesh.visible = true; resetView(); });
+    session.addEventListener('end', () => { arMode = false; if (state.pilot) setRole(false); env.visible = true; scene.background = SKY; scene.fog = new THREE.Fog(SKY, 10, 45); document.body.classList.remove('in-xr'); hud.mesh.visible = true; resetView(); });
     await renderer.xr.setSession(session);
     document.body.classList.add('in-xr');
     xrFrames = 0;
+    if (state.pilot) { exitCockpit(); xrPilotPending = true; }
     toggleMenu(true);
   } catch (err) { console.error(err); alert('Nie udało się uruchomić sesji XR: ' + err.message); }
 }
@@ -525,7 +580,7 @@ function hudState(tof) {
   return {
     pilot: state.pilot, wave, down: air.stats.down, escaped: air.stats.escaped,
     planes: air.alive().length, home: `${terrain.homeAlive()}/${terrain.home.houses.length}`,
-    ready: flak.ready().length, guns: flak.guns.length, mode: FIRE_MODES[state.fire].name + (state.fire === 2 ? (contOn ? ' (wł.)' : ' (wył.)') : ''),
+    ready: flak.ready().length, guns: flak.guns.length, mode: FIRE_MODES[state.fire].name + (contOn ? ' · CIĄGŁY' : ''),
     countdown: countdown !== null ? Math.max(0, countdown) : null,
     tof: tof ? `${tof.min.toFixed(1)}–${tof.max.toFixed(1)} s` : null,
     box: `${Math.round(box.max.x - box.min.x)}×${Math.round(box.max.y - box.min.y)}×${Math.round(box.max.z - box.min.z)} m, wys. ${Math.round(box.min.y)}–${Math.round(box.max.y)} m`,
@@ -538,24 +593,26 @@ renderer.setAnimationLoop(() => {
   const dt = Math.min(0.05, clock.getDelta());
   clockT += dt;
   const xr = renderer.xr.isPresenting;
-  controls.enabled = !xr && !dragBox;
-  if (xr) { xrFrames++; if (xrFrames === 3) placeTable(); pollXRInput(dt); } else desktopInput(dt);
+  controls.enabled = !xr && !dragBox && !state.pilot;
+  if (xr) { xrFrames++; if (xrFrames === 3) { placeTable(); if (xrPilotPending) { xrPilotPending = false; enterCockpit(); } } pollXRInput(dt); } else desktopInput(dt);
   table.update();
   scene.updateMatrixWorld();
   const menuHit = updateMenuHover();
   simStep(dt);
+  updateCockpit();
+  scene.updateMatrixWorld();
   const center = new THREE.Vector3().addVectors(box.min, box.max).multiplyScalar(0.5);
   const tof = flak.flightTimes(center);
   const burstT = countdown !== null ? countdown : tof ? tof.max + (FIRE_MODES[state.fire].key === 'sync' ? 0.4 : 0) : 0;
   air.render(state.pilot ? 0 : burstT);
   updateBoxVis(tof ? burstT : 0);
   for (const o of ctrls) { if (!o.source) continue; o.ray.material.opacity = o === aimCtrl ? 0.7 : 0.2; o.ray.scale.z = menuHit && o === aimCtrl ? menuHit.distance : 0.6; }
-  updateSun();
+  if (!state.pilot) updateSun();
   terrain.glowMaterial.color.setHex(table.active ? 0xbff4ff : 0x4fd2ff);
   hud.draw(hudState(tof));
-  menu.draw({ pilot: state.pilot, fire: state.fire, guns: state.guns, view: state.view, pred: state.pred });
+  menu.draw({ pilot: state.pilot, fire: state.fire, guns: state.guns, view: state.view, pred: state.pred, burstR: state.burstR, speed: state.speed, maneuver: MANEUVER[state.maneuver] });
   const pip = updatePip(dt);
-  if (!xr) controls.update();
+  if (!xr && !state.pilot) controls.update();
   if (pip && xr) renderPipToTarget(); else monitor.visible = false;
   renderer.render(scene, camera);
   // na komputerze: podgląd w rogu ekranu

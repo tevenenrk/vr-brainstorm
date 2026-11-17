@@ -7,10 +7,10 @@ export const FIRE_MODES = [
 ];
 export const VIEWS = [
   { key: 'none', name: 'Brak' },
-  { key: 'shell', name: 'Z pocisku' },
   { key: 'chase', name: 'Za samolotem' },
   { key: 'cockpit', name: 'Z kokpitu' },
 ];
+export const MANEUVER = ['Brak', 'Lekkie', 'Średnie', 'Agresywne'];
 
 export class FlakHud extends CanvasPanel {
   constructor() { super(640, 470, 0.17); }
@@ -43,11 +43,11 @@ export class FlakHud extends CanvasPanel {
     (s.pilot ? [
       'Prawa gałka: skręt ←→, wznoszenie ↑↓ · spust: bomby',
       'Działa AI celują w Twój samolot — manewruj!',
-      'B: menu · klik prawej gałki: widok · Y: następna fala',
+      'Lecisz w kabinie — B: menu · Y: następna fala',
     ] : [
-      'Spust: ognia · trzymaj A: rozciągnij strefę obiema rękami',
+      'Spust: ognia · 2× spust: ogień ciągły · trzymaj A: strefa',
       'Prawa gałka ↑↓ wysokość strefy · ←→ jej wielkość',
-      'Klik prawej gałki: widok · klik lewej: następny samolot',
+      'Klik prawej gałki: podgląd · klik lewej: następny samolot',
       'B: menu · Y: następna fala · X: makieta przed siebie',
     ]).forEach((l, i) => c.fillText(l, 30, 320 + i * 30));
     this.tex.needsUpdate = true;
@@ -55,7 +55,7 @@ export class FlakHud extends CanvasPanel {
 }
 
 export class FlakMenu extends CanvasPanel {
-  constructor() { super(720, 980, 0.2); this.buttons = []; this.hover = -1; this.mesh.visible = false; }
+  constructor() { super(720, 1130, 0.2); this.buttons = []; this.hover = -1; this.mesh.visible = false; }
   hit(px, py) { return this.buttons.findIndex((b) => px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h); }
   draw(o) {
     const key = JSON.stringify([o, this.hover]);
@@ -82,19 +82,26 @@ export class FlakMenu extends CanvasPanel {
     row([['Działa (Flak)', 'role:gun', !o.pilot], ['Pilot samolotu', 'role:pilot', o.pilot]], y, 62); y += 76;
     label('TRYB OGNIA', y + 22); y += 32;
     row(FIRE_MODES.map((m, i) => [m.name, 'fire:' + i, o.fire === i]), y); y += 72;
-    c.fillStyle = '#eef2d8'; c.font = '27px system-ui, sans-serif'; c.fillText('Liczba dział', 30, y + 38);
-    btn(390, y, 64, 56, '−', 'guns-'); c.fillStyle = '#fff'; c.font = 'bold 28px system-ui, sans-serif'; c.textAlign = 'center'; c.fillText(String(o.guns), 540, y + 38); c.textAlign = 'left'; btn(626, y, 64, 56, '+', 'guns+');
-    y += 72;
-    label('PODGLĄD (OBRAZ W OBRAZIE)', y + 22); y += 32;
+    const setting = (t, v, a) => {
+      c.fillStyle = '#eef2d8'; c.font = '27px system-ui, sans-serif'; c.fillText(t, 30, y + 38);
+      btn(390, y, 64, 56, '−', a + '-'); c.fillStyle = '#fff'; c.font = 'bold 26px system-ui, sans-serif'; c.textAlign = 'center'; c.fillText(v, 540, y + 38); c.textAlign = 'left'; btn(626, y, 64, 56, '+', a + '+');
+      y += 66;
+    };
+    setting('Promień rażenia pocisku', `${o.burstR} m`, 'burst');
+    setting('Prędkość samolotów', `${Math.round(o.speed * 100)}%`, 'pspeed');
+    setting('Manewrowanie', o.maneuver, 'man');
+    setting('Liczba dział', String(o.guns), 'guns');
+    y += 6;
+    label('PODGLĄD Z SAMOLOTU (obraz w obrazie, rola działa)', y + 22); y += 32;
     row(VIEWS.map((v, i) => [v.name, 'view:' + i, o.view === i]), y); y += 68;
     row([['◀ Samolot', 'plane-'], ['Samolot ▶', 'plane+'], [`Predykcja: ${o.pred ? 'wł.' : 'wył.'}`, 'pred']], y); y += 76;
     row([['Następna fala', 'wave', false, '#5a2a2a'], ['Nowa gra', 'new', false, '#5a3a2a']], y); y += 68;
     row([['Przed siebie', 'place'], ['Zamknij', 'close']], y); y += 68;
-    row([['Artyleria', 'mode:index.html', false, '#2a3a5a'], ['Katastrofy', 'mode:disasters.html', false, '#5a3a1a'], ['Stół pinów', 'mode:pins.html', false, '#1a3a5a']], y); y += 86;
+    row([['Artyleria', 'mode:index.html', false, '#2a3a5a'], ['Katastrofy', 'mode:disasters.html', false, '#5a3a1a'], ['Piny', 'mode:pins.html', false, '#1a3a5a'], ['Bitwa', 'mode:battle.html', false, '#2a3a5a'], ['Bomba', 'mode:nuke.html', false, '#6a2a1a']], y); y += 86;
     c.font = '21px system-ui, sans-serif'; c.fillStyle = '#d0d8b8';
     [
-      'Zsynchronizowany: działa same dobierają opóźnienia,',
-      'tak by wszystkie pociski wybuchły w strefie w jednej chwili.',
+      'Zsynchronizowany: wszystkie pociski wybuchają naraz.',
+      '2× spust w każdym trybie: ogień ciągły (spust = stop).',
       'Przerywane linie: tor samolotów na 30 s, kropki co 10 s,',
       'żółte romby: gdzie samolot będzie w chwili wybuchu.',
     ].forEach((l, i) => c.fillText(l, 30, y + i * 28));

@@ -76,7 +76,7 @@ const MATS = {
   crate: new THREE.MeshLambertMaterial({ color: 0x5d4a2a }),
 };
 
-function makeGunModel() {
+export function makeGunModel() {
   const { olive, dark, black, sand } = MATS;
   const root = new THREE.Group();
   const add = (parent, geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };

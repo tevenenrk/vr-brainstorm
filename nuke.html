@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bomba w skali VR</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #24303a; overflow: hidden; font-family: system-ui, sans-serif; color: #e4efe6; }
+    #app canvas { display: block; }
+    #panel { position: fixed; left: 16px; top: 16px; max-width: 380px; background: rgba(18, 22, 14, 0.86); border: 1px solid rgba(190, 210, 140, 0.4); border-radius: 14px; padding: 16px 18px; box-shadow: 0 8px 30px rgba(0,0,0,0.35); }
+    #panel h1 { margin: 0 0 6px; font-size: 20px; color: #eef2d8; }
+    #panel p { margin: 6px 0; font-size: 13px; line-height: 1.45; color: #c8d0b8; }
+    .btns { display: flex; gap: 8px; margin: 12px 0 6px; flex-wrap: wrap; }
+    button, a.btn { font: 600 15px system-ui, sans-serif; padding: 10px 14px; border-radius: 10px; border: 0; background: #c8d88a; color: #1a2008; cursor: pointer; text-decoration: none; }
+    button.alt, a.btn.alt { background: #cfe8ff; color: #102233; }
+    button:disabled { background: #39423c; color: #7d8c80; cursor: not-allowed; }
+    #xr-note { color: #ffcf8a; min-height: 1em; }
+    kbd { background: #33392c; border-radius: 4px; padding: 1px 5px; font-size: 12px; }
+    #hud { position: fixed; right: 16px; top: 16px; }
+    #hud canvas { width: 300px; height: auto; display: block; }
+    #menu { position: fixed; right: 330px; top: 16px; display: none; }
+    #menu canvas { width: 300px; height: auto; display: block; cursor: pointer; }
+    body.in-xr #panel, body.in-xr #hud, body.in-xr #menu { display: none !important; }
+    @media (max-width: 800px) { #hud canvas, #menu canvas { width: 200px; } #panel { max-width: calc(100% - 250px); } }
+  </style>
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three/build/three.module.min.js", "three/addons/": "./vendor/three/addons/" } }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="panel">
+    <h1>Bomba atomowa w prawdziwej skali</h1>
+    <p>Makieta 40 × 40 km (skala 1:20 000) z miastem. Wybierz bombę od Little Boy do Car-bomby i zobacz w prawdziwej skali kulę ognia, falę uderzeniową, strefy zniszczeń i grzyb. Tryb filmowy zwalnia błysk i przyspiesza wznoszenie chmury.</p>
+    <div class="btns">
+      <button id="btn-vr">Wejdź w VR</button>
+      <button id="btn-ar" class="alt">Mixed Reality</button>
+      <button id="btn-menu" class="alt">Menu</button>
+      <a class="btn alt" href="index.html">Artyleria</a>
+      <a class="btn alt" href="disasters.html">Katastrofy</a>
+      <a class="btn alt" href="pins.html">Stół pinów</a>
+      <a class="btn alt" href="flak.html">Flak</a>
+      <a class="btn alt" href="battle.html">Bitwa</a>
+    </div>
+    <p id="xr-note"></p>
+    <p><b>Na komputerze:</b> klik — punkt zero, <kbd>Spacja</kbd> — detonacja, <kbd>1</kbd>–<kbd>7</kbd> — bomba, <kbd>G</kbd> — powietrzny/naziemny, <kbd>+</kbd>/<kbd>-</kbd> — tempo, <kbd>C</kbd> — tryb filmowy, <kbd>P</kbd> — pauza, <kbd>R</kbd> — odbuduj, <kbd>O</kbd> — menu.</p>
+  </div>
+  <div id="hud"></div>
+  <div id="menu"></div>
+  <script type="module" src="./src/nuke/main.js"></script>
+</body>
+</html>

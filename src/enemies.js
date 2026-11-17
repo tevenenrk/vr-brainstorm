@@ -11,7 +11,7 @@ const TANK_DMG_COLOR = new THREE.Color(0.75, 0.45, 0.2);
 const WRECK_COLOR = new THREE.Color(0.16, 0.14, 0.13);
 const nonIdx = (g) => (g.index ? g.toNonIndexed() : g);
 
-function soldierGeometry() {
+export function soldierGeometry() {
   const parts = [
     new THREE.BoxGeometry(1.3, 4.6, 1.5).translate(-0.9, 2.3, 0),
     new THREE.BoxGeometry(1.3, 4.6, 1.5).translate(0.9, 2.3, 0),
@@ -26,7 +26,7 @@ function soldierGeometry() {
 }
 
 // czołg: przód w +Z; gąsienice ciemniejsze (kolor wierzchołków), reszta barwiona kolorem instancji
-function tankGeometry() {
+export function tankGeometry() {
   const colored = (g, c) => {
     g = nonIdx(g);
     const n = g.attributes.position.count, arr = new Float32Array(n * 3);

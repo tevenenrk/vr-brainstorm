@@ -173,6 +173,8 @@ function menuAction(act) {
     case 'mode': location.href = 'index.html'; break;
     case 'mode2': location.href = 'pins.html'; break;
     case 'mode3': location.href = 'flak.html'; break;
+    case 'mode4': location.href = 'battle.html'; break;
+    case 'mode5': location.href = 'nuke.html'; break;
     case 'close': toggleMenu(false); break;
     default: break;
   }

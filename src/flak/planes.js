@@ -110,6 +110,8 @@ export class Airforce {
     this.stats = { down: 0, escaped: 0 };
     this.onBombHit = null; this.onCrash = null;
     this.showPrediction = true;
+    this.speedMult = 1;     // mnożnik prędkości samolotów
+    this.maneuver = 2;      // 0 brak … 3 agresywne
     this._m = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._v = new THREE.Vector3(); this._s = new THREE.Vector3(1, 1, 1); this._c = new THREE.Color();
     this._ps = new THREE.Vector3(1.4, 1.4, 1.4);
   }
@@ -166,11 +168,13 @@ export class Airforce {
     g.nextMan -= dt;
     g.lastThreat = (g.lastThreat ?? 99) + dt;
     const base = !g.bombed && g.target ? Math.atan2(g.target.x - L.pos.x, g.target.z - L.pos.z) : 0;
-    if (g.nextMan <= 0 || (g.lastThreat < 0.3 && g.nextMan > 2 && Math.random() < 0.02)) {
+    const lvl = this.maneuver, amp = [0, 0.5, 1, 1.7][lvl], every = [1e9, 1.6, 1, 0.55][lvl];
+    if (lvl === 0) { g.targetYaw = base; return; }
+    if (g.nextMan <= 0 || (g.lastThreat < 0.3 && g.nextMan > 2 && Math.random() < 0.01 * lvl)) {
       const fighter = g.type === 'fighter';
-      g.nextMan = (fighter ? 3 : 6) + Math.random() * (fighter ? 4 : 8);
-      g.targetYaw = base + (Math.random() - 0.5) * (fighter ? 110 : 60) * DEG;
-      if (Math.random() < 0.5) g.targetAlt = Math.max(250, Math.min(950, L.pos.y + (Math.random() - 0.5) * (fighter ? 400 : 260)));
+      g.nextMan = ((fighter ? 3 : 6) + Math.random() * (fighter ? 4 : 8)) * every;
+      g.targetYaw = base + (Math.random() - 0.5) * (fighter ? 110 : 60) * DEG * amp;
+      if (Math.random() < 0.5) g.targetAlt = Math.max(250, Math.min(950, L.pos.y + (Math.random() - 0.5) * (fighter ? 400 : 260) * amp));
     }
     // poza makietą wracaj nad nią
     if (Math.abs(L.pos.x) > 650) g.targetYaw = Math.atan2(-L.pos.x, 300);
@@ -179,8 +183,10 @@ export class Airforce {
 
   steerLeader(g, L, dt) {
     const d = L.def;
+    L.speed = d.speed * this.speedMult;
+    const tm = [0.6, 0.8, 1, 1.6][this.maneuver];
     const dy = wrap(g.targetYaw - L.yaw);
-    L.turnRate += (Math.max(-d.turn, Math.min(d.turn, dy * 0.6)) - L.turnRate) * Math.min(1, dt * 1.5);
+    L.turnRate += (Math.max(-d.turn * tm, Math.min(d.turn * tm, dy * 0.6)) - L.turnRate) * Math.min(1, dt * 1.5);
     const dalt = g.targetAlt - L.pos.y;
     L.climbRate += (Math.max(-d.climb, Math.min(d.climb, dalt * 0.25)) - L.climbRate) * Math.min(1, dt * 1.2);
     L.yaw += L.turnRate * dt;
@@ -196,6 +202,7 @@ export class Airforce {
       if (g.player && player) {
         // gracz: skręt i wznoszenie z drążka
         const d = L.def;
+        L.speed = d.speed * this.speedMult;
         L.turnRate += (player.turn * d.turn * 1.4 - L.turnRate) * Math.min(1, dt * 2.5);
         L.climbRate += (player.climb * d.climb * 1.6 - L.climbRate) * Math.min(1, dt * 2);
         L.yaw += L.turnRate * dt;
@@ -214,7 +221,7 @@ export class Airforce {
         if (p === L || p.state !== 'fly') continue;
         const want = L.pos.clone().add(p.slot.clone().applyAxisAngle(UP, L.yaw));
         const v = lv.clone().add(want.sub(p.pos).multiplyScalar(0.6));
-        const sp = v.length(), maxS = p.def.speed * 1.35;
+        const sp = v.length(), maxS = p.def.speed * this.speedMult * 1.35;
         if (sp > maxS) v.multiplyScalar(maxS / sp);
         p.pos.addScaledVector(v, dt);
         const yaw = Math.atan2(v.x, v.z);
@@ -223,7 +230,7 @@ export class Airforce {
         p.pitch = Math.atan2(v.y, Math.hypot(v.x, v.z));
         p.climbRate = L.climbRate;
         p.roll += (L.roll - p.roll) * Math.min(1, dt * 3);
-        p.speed = Math.max(p.def.speed * 0.7, Math.hypot(v.x, v.z));
+        p.speed = Math.max(p.def.speed * this.speedMult * 0.7, Math.hypot(v.x, v.z));
       }
       // zrzut bomb nad celem (bombowce)
       if (!g.bombed && g.type === 'bomber' && g.target) {

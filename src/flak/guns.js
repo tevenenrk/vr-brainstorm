@@ -182,7 +182,7 @@ export class Flak {
       if (s.t >= s.T) {
         this.shells.splice(i, 1);
         s.burst = true;
-        this.burstFx(s.pos);
+        this.burstFx(s.pos, this.burstScale || 1);
         if (this.onBurst) this.onBurst(s.pos.clone(), s);
       } else if (s.pos.y < this.terrain.surfaceAt(s.pos.x, s.pos.z)) this.shells.splice(i, 1);
     }
@@ -207,14 +207,14 @@ export class Flak {
   }
 
   // wybuch flaku: błysk, czarny obłok i drobne odłamki
-  burstFx(p) {
+  burstFx(p, k = 1) {
     const fx = this.effects;
-    for (let i = 0; i < 4; i++) fx.fire.spawn({ p: p.clone(), v: new THREE.Vector3((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20), life: 0.18, s0: 9, s1: 16, c0: 0xffe8b0, c1: 0x000000, drag: 0.1 });
+    for (let i = 0; i < 4; i++) fx.fire.spawn({ p: p.clone(), v: new THREE.Vector3((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20), life: 0.18, s0: 9 * k, s1: 16 * k, c0: 0xffe8b0, c1: 0x000000, drag: 0.1 });
     for (let i = 0; i < 26; i++) {
-      const d = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(140 + Math.random() * 160);
+      const d = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar((140 + Math.random() * 160) * k);
       fx.fire.spawn({ p: p.clone(), v: d, life: 0.22 + Math.random() * 0.15, s0: 1.1, s1: 0.6, c0: 0xffd070, c1: 0x301000, drag: 0.2 });
     }
-    for (let i = 0; i < 7; i++) fx.smoke.spawn({ p: p.clone().add(new THREE.Vector3((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6)), v: new THREE.Vector3((Math.random() - 0.5) * 6, 1 + Math.random() * 2, (Math.random() - 0.5) * 6), life: 7 + Math.random() * 4, s0: 6, s1: 16 + Math.random() * 6, c0: 0x161514, c1: 0x5e5a56, drag: 0.4 });
+    for (let i = 0; i < 7; i++) fx.smoke.spawn({ p: p.clone().add(new THREE.Vector3((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6)), v: new THREE.Vector3((Math.random() - 0.5) * 6, 1 + Math.random() * 2, (Math.random() - 0.5) * 6), life: 7 + Math.random() * 4, s0: 6 * k, s1: (16 + Math.random() * 6) * k, c0: 0x161514, c1: 0x5e5a56, drag: 0.4 });
   }
 
   render() {

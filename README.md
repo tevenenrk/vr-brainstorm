@@ -1,10 +1,12 @@
 # Stół Artyleryjski VR + Makieta Katastrof (Meta Quest 3 / 3S)
 
-Cztery tryby na lewitującej platformie:
+Sześć trybów na lewitującej platformie:
 - **Artyleria** (`index.html`): bronisz wioski przed piechotą i czołgami.
 - **Makieta katastrof** (`disasters.html`): kwadratowy miniaturowy świat, na którym wywołujesz katastrofy.
 - **Stół pinów** (`pins.html`): matryca wysuwanych pinów (shape display), z której rzeźbisz powierzchnie i która manipuluje przedmiotami.
 - **Flak** (`flak.html`): obrona przeciwlotnicza na makiecie z artylerii, ze strefą wybuchów, synchronizacją salw i rolą pilota.
+- **Bitwa** (`battle.html`): dwie armie walczą same, a Ty obserwujesz i dosyłasz posiłki.
+- **Bomba w skali** (`nuke.html`): makieta 40 × 40 km z miastem i wybuch jądrowy w prawdziwych proporcjach, ze zwolnionym tempem.
 
 Między trybami przełączasz się przyciskiem na stronie albo w menu w VR.
 
@@ -196,17 +198,25 @@ przeciwlotniczych na krzyżowych podstawach.
   - **Zsynchronizowany:** działa same dobierają opóźnienia strzałów, tak by wszystkie pociski wybuchły
     w strefie w jednej chwili, i odliczają czas do wybuchu.
   - **Pojedyncza salwa:** wszystkie gotowe działa strzelają od razu.
-  - **Ogień ciągły:** każde działo strzela, gdy tylko się przeładuje. Spust włącza i wyłącza ten tryb.
+  - **Ogień ciągły:** każde działo strzela, gdy tylko się przeładuje. Włącza go **podwójny spust** w każdym
+    trybie (albo pojedynczy w trybie „ciągły”), a kolejny spust zatrzymuje.
+- **Ustawienia w menu:**
+  - promień rażenia pojedynczego pocisku (20–250 m);
+  - prędkość samolotów (30–250%);
+  - poziom manewrowania: brak, lekkie, średnie albo agresywne. Od niego zależy, jak często i jak ostro klucze
+    skręcają, zmieniają wysokość i robią uniki;
+  - liczba dział (1–30).
 - **Pociski** mają zapalnik czasowy i wybuchają w powietrzu: błysk, czarny obłok i drobne odłamki. Trafienie
   zależy od prawdopodobieństwa (im bliżej samolotu wybuch, tym większa szansa). Trafiony samolot dymi,
   a zestrzelony spada korkociągiem i rozbija się.
 - **Predykcja:** cienkie przerywane linie pokazują tor każdego samolotu na 30 s naprzód, z kropkami co 10 s.
   Żółte romby pokazują, gdzie samoloty będą w chwili wybuchu. Gdy klucz zmienia manewr, predykcja się zmienia.
-- **Pilot:** w menu wybierasz rolę „Pilot samolotu”. Prowadzisz klucz bombowców prawą gałką i spustem zrzucasz
-  bomby. Działa AI celują w Ciebie z wyprzedzeniem.
-- **Podgląd (obraz w obrazie):** z pocisku, zza samolotu albo z kokpitu wybranego samolotu. W VR jest na
-  panelu nad lewą ręką, a na komputerze w rogu ekranu. Klik prawej gałki zmienia widok, a klik lewej wybiera
-  następny samolot.
+- **Pilot:** w menu wybierasz rolę „Pilot samolotu”. **Siedzisz w kabinie bombowca**, a makieta w skali 1:1 przesuwa się
+  i obraca wokół Ciebie (deska rozdzielcza i rama kabiny są stałe, dla wygody). Prowadzisz prawą gałką,
+  a spustem zrzucasz bomby. Działa AI celują w Ciebie z wyprzedzeniem.
+- **Podgląd z samolotu (rola działa):** obraz w obrazie zza samolotu albo z kokpitu wybranego samolotu.
+  W VR jest na panelu nad lewą ręką, a na komputerze w rogu ekranu. Klik prawej gałki zmienia widok,
+  a klik lewej wybiera następny samolot.
 
 Sterowanie w VR:
 - spust: ognia (albo bomby jako pilot);
@@ -229,11 +239,48 @@ Na komputerze:
 - `F`: fala;
 - `L`: predykcja.
 
+## Tryb: Bitwa (obserwator)
+
+Na makiecie artylerii walczą dwie armie: **Niebiescy** (bliższy koniec) i **Czerwoni** (daleki koniec). Każda ma
+piechotę (oddziały po 8), czołgi i działa artyleryjskie.
+
+- **Piechota** idzie naprzód, a gdy widzi wroga, zatrzymuje się i strzela (widać smugi). W lesie ma osłonę.
+- **Czołgi** strzelają pociskami odłamkowymi na większy dystans.
+- **Artyleria** ostrzeliwuje skupiska wrogów z daleka. Wybuchy zostawiają leje i ranią każdego w zasięgu,
+  także własnych.
+
+W menu ustawiasz skład obu armii i zaczynasz nową bitwę. Przyciskami „Posiłki” dosyłasz w trakcie oddziały,
+czołgi lub działa dowolnej stronie. Można też zmieniać tempo (0,25–4×) i pauzować. Panel pokazuje siły
+obu stron i zwycięzcę.
+
+## Tryb: Bomba w skali
+
+Makieta 40 × 40 km w skali 1:20 000 (2 × 2 m na stole) z miastem z kilku tysięcy budynków, rzeką i wybrzeżem.
+Do wyboru są bomby od Little Boy (15 kt) przez W76, W88 i B83 po Castle Bravo i Car-bombę (50 Mt), wybuch
+powietrzny lub naziemny.
+
+Wielkości liczone są z przybliżonych wzorów skalujących (rząd wielkości jak w NUKEMAP / Glasstone & Dolan):
+- kula ognia;
+- strefy 20, 5 i 1 psi;
+- oparzenia III stopnia;
+- wysokość grzyba i średnica jego czapy.
+
+Strefy widać jako kolorowe pierścienie, a wartości w kilometrach na panelu. Podziałka 10 km przy krawędzi
+pomaga ocenić skalę.
+
+Przebieg wybuchu:
+1. błysk rozjaśnia całą scenę;
+2. kula ognia rośnie, a przy wybuchu powietrznym pojawia się chmura kondensacyjna (Wilsona);
+3. fala uderzeniowa biegnie po ziemi z prędkością dźwięku i niszczy budynki według stref;
+4. miasto płonie;
+5. grzyb wznosi się przez kilka minut.
+
+**Tryb filmowy** sam zwalnia błysk i kulę ognia (nawet 50×), pokazuje falę w normalnym tempie i przyspiesza
+wznoszenie chmury. Tempo można też ustawiać ręcznie (0,02–40×).
+
 ## Plany na później
 
-- **Tryb oglądacza (bitwa sama się toczy):** na makiecie artylerii piechota, czołgi, artyleria, flak
-  i samoloty obu stron ruszają na siebie same. Wybierasz liczbę i rodzaje jednostek po każdej stronie
-  i dokładasz je w trakcie, a sam tylko patrzysz.
+- W trybie bitwy: samoloty i flak obu stron.
 
 ## Podgląd na komputerze (artyleria)
 
@@ -291,4 +338,6 @@ Potem otwórz na Queście `http://localhost:8000` (localhost traktowany jest jak
 - `src/pins/ui.js`, `src/pins/main.js`: panel, menu, monitor kamery i pętla trybu stołu pinów.
 - `src/flak/guns.js`: działa przeciwlotnicze (instancje), zapalniki czasowe, synchronizacja salw, wybuchy.
 - `src/flak/planes.js`: klucze samolotów, manewry, predykcja toru, bomby, zestrzelenia.
-- `src/flak/ui.js`, `src/flak/main.js`: panel, menu, strefa wybuchów, podgląd obraz-w-obrazie i pętla trybu.
+- `src/flak/ui.js`, `src/flak/main.js`: panel, menu, strefa wybuchów, podgląd obraz-w-obrazie, kabina pilota i pętla trybu.
+- `src/battle/army.js`, `src/battle/main.js`: symulacja dwóch armii (piechota, czołgi, artyleria) i tryb obserwatora.
+- `src/nuke/world.js`, `src/nuke/blast.js`, `src/nuke/main.js`: makieta 40 × 40 km z miastem, model i wizualizacja wybuchu jądrowego.
