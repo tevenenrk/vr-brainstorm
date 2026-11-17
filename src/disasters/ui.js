@@ -76,9 +76,10 @@ export class DisasterMenu extends CanvasPanel {
     btn(34, y, 316, 66, 'Odbuduj świat', 'reset', '#5a3a2a');
     btn(370, y, 316, 66, 'Przed siebie', 'place');
     y += 84;
-    btn(34, y, 210, 66, 'Artyleria', 'mode', '#2a3a5a');
-    btn(254, y, 210, 66, 'Stół pinów', 'mode2', '#1a3a5a');
-    btn(474, y, 212, 66, 'Zamknij', 'close');
+    btn(34, y, 155, 66, 'Artyleria', 'mode', '#2a3a5a');
+    btn(199, y, 155, 66, 'Stół pinów', 'mode2', '#1a3a5a');
+    btn(364, y, 155, 66, 'Flak', 'mode3', '#3a4a1a');
+    btn(529, y, 157, 66, 'Zamknij', 'close');
     y += 100;
     c.font = '22px system-ui, sans-serif'; c.fillStyle = '#9fb0a4';
     [

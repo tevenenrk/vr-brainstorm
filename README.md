@@ -1,9 +1,10 @@
 # Stół Artyleryjski VR + Makieta Katastrof (Meta Quest 3 / 3S)
 
-Trzy tryby na lewitującej platformie:
+Cztery tryby na lewitującej platformie:
 - **Artyleria** (`index.html`): bronisz wioski przed piechotą i czołgami.
 - **Makieta katastrof** (`disasters.html`): kwadratowy miniaturowy świat, na którym wywołujesz katastrofy.
 - **Stół pinów** (`pins.html`): matryca wysuwanych pinów (shape display), z której rzeźbisz powierzchnie i która manipuluje przedmiotami.
+- **Flak** (`flak.html`): obrona przeciwlotnicza na makiecie z artylerii, ze strefą wybuchów, synchronizacją salw i rolą pilota.
 
 Między trybami przełączasz się przyciskiem na stronie albo w menu w VR.
 
@@ -182,6 +183,58 @@ Na komputerze:
 - `Z`: cofnij;
 - `O`: menu.
 
+## Tryb: Flak (obrona przeciwlotnicza)
+
+Ta sama makieta 1 × 4 km co w artylerii. Klucze bombowców (a od 3. fali także myśliwców) lecą nad
+Twoją wioskę i zrzucają bomby. Klucze manewrują, a gdy obok wybucha flak, robią uniki. Masz do **30 dział**
+przeciwlotniczych na krzyżowych podstawach.
+
+- **Strefa wybuchów:** prostopadłościan w powietrzu. W VR **trzymasz A** i rozciągasz go między końcówkami obu
+  kontrolerów. Prawa gałka ↑/↓ zmienia wysokość strefy, a ←/→ jej wielkość. Nad strefą widać,
+  **za ile sekund** wybuchną pociski.
+- **Tryby ognia:**
+  - **Zsynchronizowany:** działa same dobierają opóźnienia strzałów, tak by wszystkie pociski wybuchły
+    w strefie w jednej chwili, i odliczają czas do wybuchu.
+  - **Pojedyncza salwa:** wszystkie gotowe działa strzelają od razu.
+  - **Ogień ciągły:** każde działo strzela, gdy tylko się przeładuje. Spust włącza i wyłącza ten tryb.
+- **Pociski** mają zapalnik czasowy i wybuchają w powietrzu: błysk, czarny obłok i drobne odłamki. Trafienie
+  zależy od prawdopodobieństwa (im bliżej samolotu wybuch, tym większa szansa). Trafiony samolot dymi,
+  a zestrzelony spada korkociągiem i rozbija się.
+- **Predykcja:** cienkie przerywane linie pokazują tor każdego samolotu na 30 s naprzód, z kropkami co 10 s.
+  Żółte romby pokazują, gdzie samoloty będą w chwili wybuchu. Gdy klucz zmienia manewr, predykcja się zmienia.
+- **Pilot:** w menu wybierasz rolę „Pilot samolotu”. Prowadzisz klucz bombowców prawą gałką i spustem zrzucasz
+  bomby. Działa AI celują w Ciebie z wyprzedzeniem.
+- **Podgląd (obraz w obrazie):** z pocisku, zza samolotu albo z kokpitu wybranego samolotu. W VR jest na
+  panelu nad lewą ręką, a na komputerze w rogu ekranu. Klik prawej gałki zmienia widok, a klik lewej wybiera
+  następny samolot.
+
+Sterowanie w VR:
+- spust: ognia (albo bomby jako pilot);
+- **B**: menu;
+- **Y**: następna fala;
+- **X**: makieta przed siebie;
+- grip: chwyć makietę;
+- lewa gałka: obrót i zoom.
+
+Na komputerze:
+- `Spacja`/klik: ognia;
+- `Shift` + przeciągnięcie: rzut strefy na teren;
+- `W`/`S`: wysokość strefy;
+- `Q`/`E`: grubość;
+- strzałki: przesuń strefę;
+- `1`–`3`: tryb ognia;
+- `V`: podgląd;
+- `N`: samolot;
+- `P`: pilot (strzałki/WASD);
+- `F`: fala;
+- `L`: predykcja.
+
+## Plany na później
+
+- **Tryb oglądacza (bitwa sama się toczy):** na makiecie artylerii piechota, czołgi, artyleria, flak
+  i samoloty obu stron ruszają na siebie same. Wybierasz liczbę i rodzaje jednostek po każdej stronie
+  i dokładasz je w trakcie, a sam tylko patrzysz.
+
 ## Podgląd na komputerze (artyleria)
 
 - klik / `Spacja`: salwa;
@@ -236,3 +289,6 @@ Potem otwórz na Queście `http://localhost:8000` (localhost traktowany jest jak
 - `src/pins/programs.js`: programy manipulacji przedmiotami (podpieranie, przenoszenie, obracanie, przewracanie, podrzut, kopia).
 - `src/pins/tools.js`, `src/pins/presets.js`: pędzel, wciskanie, splajny i powierzchnie oraz gotowe kształty.
 - `src/pins/ui.js`, `src/pins/main.js`: panel, menu, monitor kamery i pętla trybu stołu pinów.
+- `src/flak/guns.js`: działa przeciwlotnicze (instancje), zapalniki czasowe, synchronizacja salw, wybuchy.
+- `src/flak/planes.js`: klucze samolotów, manewry, predykcja toru, bomby, zestrzelenia.
+- `src/flak/ui.js`, `src/flak/main.js`: panel, menu, strefa wybuchów, podgląd obraz-w-obrazie i pętla trybu.

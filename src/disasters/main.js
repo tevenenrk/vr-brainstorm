@@ -172,6 +172,7 @@ function menuAction(act) {
     case 'place': placeTable(); break;
     case 'mode': location.href = 'index.html'; break;
     case 'mode2': location.href = 'pins.html'; break;
+    case 'mode3': location.href = 'flak.html'; break;
     case 'close': toggleMenu(false); break;
     default: break;
   }

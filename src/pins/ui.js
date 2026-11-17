@@ -91,7 +91,7 @@ export class PinMenu extends CanvasPanel {
     setting('Prędkość pinów', `${o.speed.toFixed(2)} m/s`, 'speed');
     row([[`Kolory: ${o.colorMode ? 'mapa' : 'naturalne'}`, 'colors'], [`Cienie: ${o.shadows ? 'wł.' : 'wył.'}`, 'shadows'], [`Dotyk: ${o.touch ? 'wł.' : 'wył.'}`, 'touch']], y); y += 70;
     row([['Cofnij', 'undo'], ['Przed siebie', 'place'], ['Zamknij', 'close']], y); y += 66;
-    row([['← Artyleria', 'mode:index.html', false, '#2a3a5a'], ['Katastrofy →', 'mode:disasters.html', false, '#5a3a1a']], y);
+    row([['Artyleria', 'mode:index.html', false, '#2a3a5a'], ['Katastrofy', 'mode:disasters.html', false, '#5a3a1a'], ['Flak', 'mode:flak.html', false, '#3a4a1a']], y);
     this.tex.needsUpdate = true;
   }
 }

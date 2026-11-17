@@ -209,6 +209,7 @@ function menuAction(act) {
     case 'close': toggleMenu(false); break;
     case 'mode': location.href = 'disasters.html'; break;
     case 'mode2': location.href = 'pins.html'; break;
+    case 'mode3': location.href = 'flak.html'; break;
     default: break;
   }
   saveOpts();
