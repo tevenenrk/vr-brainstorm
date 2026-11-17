@@ -1,8 +1,9 @@
 # Stół Artyleryjski VR + Makieta Katastrof (Meta Quest 3 / 3S)
 
-Dwa tryby na lewitującej makiecie:
+Trzy tryby na lewitującej platformie:
 - **Artyleria** (`index.html`): bronisz wioski przed piechotą i czołgami.
 - **Makieta katastrof** (`disasters.html`): kwadratowy miniaturowy świat, na którym wywołujesz katastrofy.
+- **Stół pinów** (`pins.html`): matryca wysuwanych pinów (shape display), z której rzeźbisz powierzchnie i która manipuluje przedmiotami.
 
 Między trybami przełączasz się przyciskiem na stronie albo w menu w VR.
 
@@ -122,6 +123,65 @@ Na komputerze:
 - `R`: odbuduj świat;
 - `O`: menu.
 
+## Tryb: Stół pinów
+
+Stół 1,5 × 2 m z matrycą kwadratowych pinów: domyślnie **300 × 400 = 120 000 pinów po 5 mm**, wysuw do 12 cm.
+Wysokości pinów siedzą w teksturze, a karta graficzna ustawia każdy pin sama, więc ruch tysięcy pinów naraz nie
+obciąża JavaScriptu. Rozdzielczość zmienisz w menu, od 150 × 200 (10 mm) do 400 × 533 (3,75 mm).
+Jeśli gogle nie nadążają, zmniejsz ją albo wyłącz „Cienie”.
+
+| Narzędzie | Działanie |
+|---|---|
+| **Pędzel** | Trzymasz spust i malujesz po pinach. Tryby: podnieś, opuść, wygładź, wyrównaj, zeruj. Prawa gałka ↑/↓ wysuwa lub chowa piny pod promieniem w każdym narzędziu, a ←/→ zmienia wielkość pędzla. |
+| **Splajny** | Trzymasz spust na obu rękach i rysujesz w powietrzu dwie krzywe. Po puszczeniu piny wyjeżdżają do powierzchni rozpiętej między nimi. Jedna krzywa daje grzbiet. |
+| **Przedmioty** | Prostopadłościan, sześcian, kula i walec z fizyką. Chwytasz je gripem, możesz rzucać. |
+| **Wciskanie** | Końcówką kontrolera wciskasz piny jak w glinie (można wyłączyć opcją „Dotyk”). |
+
+Programy, w których piny manipulują przedmiotami (wybierasz w menu, potem spust na przedmiocie):
+
+| Program | Działanie |
+|---|---|
+| **Podpieraj** | Piny podjeżdżają pod spód, także pod przechylony przedmiot. Gdy puścisz przedmiot w powietrzu, zawisa, aż piny go podeprą. |
+| **Przenieś** | Wskazujesz przedmiot i cel. Ściana z pinów pcha przedmiot do celu i hamuje przy nim. |
+| **Obracaj** | Trzy obrotowe ramiona z pinów kręcą przedmiotem w miejscu. |
+| **Przewróć** | Piny unoszą połowę podstawy i przedmiot przewraca się na inną ścianę. Ogranicznik nie pozwala mu się toczyć dalej. |
+| **Podrzuć** | Szybkie wybicie pinami. |
+| **Kopiuj kształt** | Piny w innym miejscu odtwarzają kształt przedmiotu na żywo. |
+
+Gotowe kształty:
+- płasko;
+- teren;
+- fale (animacja);
+- makieta miasta;
+- płaskorzeźba twarzy;
+- piramidy;
+- kopuła;
+- napis;
+- **obraz z pliku**: jasność daje wysokość, a piny dostają kolory zdjęcia.
+
+Nad stołem wisi **kamera na bramownicy**. Obok stołu jest monitor z obrazem głębi, na którym widać rozpoznane
+przedmioty, ich wymiary, kąt obrotu i wysokość.
+
+Sterowanie w VR:
+- spust: narzędzie;
+- **A**: tryb pędzla albo program;
+- **B**: menu;
+- grip przy przedmiocie: chwyć go, w innym miejscu: chwyć stół (oburącz: skala);
+- lewa gałka: obrót i zoom stołu;
+- **X**: stół przed siebie;
+- **Y**: cofnij.
+
+Na komputerze:
+- klik: narzędzie;
+- `Shift` + przeciągnięcie: maluj albo rysuj splajn (dwa razy, `Enter` dla jednej krzywej);
+- `Q`/`E`: podnieś albo opuść;
+- `[`/`]`: pędzel;
+- `1`–`5`: tryby pędzla;
+- `T`: narzędzie;
+- `A`: program;
+- `Z`: cofnij;
+- `O`: menu.
+
 ## Podgląd na komputerze (artyleria)
 
 - klik / `Spacja`: salwa;
@@ -171,3 +231,8 @@ Potem otwórz na Queście `http://localhost:8000` (localhost traktowany jest jak
 - `src/disasters/agents.js`: ludziki i samochody (ruch, ucieczka, porwanie przez wodę).
 - `src/disasters/scenarios.js`: skrypty katastrof i system pożarów.
 - `src/disasters/ui.js`, `src/disasters/main.js`: panel, menu i pętla trybu katastrof.
+- `src/pins/pinfield.js`: matryca pinów renderowana na GPU (wysokości w teksturze), ruch pinów i przecięcie promienia.
+- `src/pins/physics.js`: fizyka brył sztywnych na powierzchni pinów.
+- `src/pins/programs.js`: programy manipulacji przedmiotami (podpieranie, przenoszenie, obracanie, przewracanie, podrzut, kopia).
+- `src/pins/tools.js`, `src/pins/presets.js`: pędzel, wciskanie, splajny i powierzchnie oraz gotowe kształty.
+- `src/pins/ui.js`, `src/pins/main.js`: panel, menu, monitor kamery i pętla trybu stołu pinów.

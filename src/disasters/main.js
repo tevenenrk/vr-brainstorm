@@ -171,6 +171,7 @@ function menuAction(act) {
     case 'reset': resetWorld(); toggleMenu(false); break;
     case 'place': placeTable(); break;
     case 'mode': location.href = 'index.html'; break;
+    case 'mode2': location.href = 'pins.html'; break;
     case 'close': toggleMenu(false); break;
     default: break;
   }

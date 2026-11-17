@@ -208,6 +208,7 @@ function menuAction(act) {
     case 'place': placeTable(); break;
     case 'close': toggleMenu(false); break;
     case 'mode': location.href = 'disasters.html'; break;
+    case 'mode2': location.href = 'pins.html'; break;
     default: break;
   }
   saveOpts();

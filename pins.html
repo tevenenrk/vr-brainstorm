@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stół Pinów VR</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #1f2a33; overflow: hidden; font-family: system-ui, sans-serif; color: #e4efe6; }
+    #app canvas { display: block; }
+    #panel { position: fixed; left: 16px; top: 16px; max-width: 380px; background: rgba(12, 18, 24, 0.86); border: 1px solid rgba(110, 180, 255, 0.4); border-radius: 14px; padding: 16px 18px; box-shadow: 0 8px 30px rgba(0,0,0,0.35); }
+    #panel h1 { margin: 0 0 6px; font-size: 20px; color: #d6ecff; }
+    #panel p { margin: 6px 0; font-size: 13px; line-height: 1.45; color: #b8cad8; }
+    .btns { display: flex; gap: 8px; margin: 12px 0 6px; flex-wrap: wrap; }
+    button, a.btn { font: 600 15px system-ui, sans-serif; padding: 10px 14px; border-radius: 10px; border: 0; background: #6fb4ff; color: #0a2236; cursor: pointer; text-decoration: none; }
+    button.alt, a.btn.alt { background: #cfe8ff; color: #102233; }
+    button:disabled { background: #39423c; color: #7d8c80; cursor: not-allowed; }
+    #xr-note { color: #ffcf8a; min-height: 1em; }
+    kbd { background: #2a3440; border-radius: 4px; padding: 1px 5px; font-size: 12px; }
+    #hud { position: fixed; right: 16px; top: 16px; }
+    #hud canvas { width: 300px; height: auto; display: block; }
+    #menu { position: fixed; right: 330px; top: 16px; display: none; }
+    #menu canvas { width: 300px; height: auto; display: block; cursor: pointer; }
+    #cam { position: fixed; right: 16px; top: 230px; }
+    #cam canvas { width: 220px; height: auto; display: block; }
+    body.in-xr #panel, body.in-xr #hud, body.in-xr #menu, body.in-xr #cam { display: none !important; }
+    @media (max-width: 800px) { #hud canvas, #menu canvas { width: 200px; } #cam { display: none; } #panel { max-width: calc(100% - 250px); } }
+  </style>
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three/build/three.module.min.js", "three/addons/": "./vendor/three/addons/" } }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="panel">
+    <h1>Stół Pinów</h1>
+    <p>Stół 1,5 × 2 m z matrycą wysuwanych pinów (domyślnie 300 × 400 = 120 000 pinów po 5 mm). Rzeźb, rysuj splajnami, wczytuj obrazy i pozwól pinom przesuwać przedmioty.</p>
+    <div class="btns">
+      <button id="btn-vr">Wejdź w VR</button>
+      <button id="btn-ar" class="alt">Mixed Reality</button>
+      <button id="btn-menu" class="alt">Menu</button>
+      <a class="btn alt" href="index.html">Artyleria</a>
+      <a class="btn alt" href="disasters.html">Katastrofy</a>
+    </div>
+    <p id="xr-note"></p>
+    <p><b>Na komputerze:</b> klik — narzędzie, <kbd>Shift</kbd>+przeciągnij — maluj / rysuj splajn,
+      <kbd>Q</kbd>/<kbd>E</kbd> — podnieś/opuść pod kursorem, <kbd>[</kbd>/<kbd>]</kbd> — pędzel, <kbd>1</kbd>–<kbd>5</kbd> — tryb pędzla,
+      <kbd>T</kbd> — narzędzie, <kbd>A</kbd> — tryb/program, <kbd>Z</kbd> — cofnij, <kbd>O</kbd> — menu.</p>
+  </div>
+  <div id="hud"></div>
+  <div id="menu"></div>
+  <div id="cam"></div>
+  <script type="module" src="./src/pins/main.js"></script>
+</body>
+</html>
