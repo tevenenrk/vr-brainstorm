@@ -81,7 +81,7 @@ class BattleMenu extends CanvasPanel {
     c.fillStyle = '#e8ecf2'; c.font = '25px system-ui, sans-serif'; c.fillText('Tempo czasu', 30, y + 38);
     btn(290, y, 56, 52, '−', 'speed-'); c.fillStyle = '#fff'; c.font = 'bold 26px system-ui, sans-serif'; c.textAlign = 'center'; c.fillText(`${o.speed}×`, 385, y + 37); c.textAlign = 'left'; btn(424, y, 56, 52, '+', 'speed+');
     btn(500, y, 230, 52, 'Przed siebie', 'place'); y += 70;
-    const modes = [['Artyleria', 'index.html'], ['Flak', 'flak.html'], ['Katastrofy', 'disasters.html'], ['Piny', 'pins.html'], ['Zamknij', '']];
+    const modes = [['Artyleria', 'index.html'], ['Flak', 'flak.html'], ['Katastrofy', 'disasters.html'], ['Miecze', 'medieval.html'], ['Zamknij', '']];
     modes.forEach(([l, m], i) => btn(30 + i * 142, y, 132, 56, l, m ? 'mode:' + m : 'close', m ? '#2a3a5a' : undefined));
     this.tex.needsUpdate = true;
   }

@@ -1,12 +1,13 @@
 # Stół Artyleryjski VR + Makieta Katastrof (Meta Quest 3 / 3S)
 
-Sześć trybów na lewitującej platformie:
+Siedem trybów na lewitującej platformie:
 - **Artyleria** (`index.html`): bronisz wioski przed piechotą i czołgami.
 - **Makieta katastrof** (`disasters.html`): kwadratowy miniaturowy świat, na którym wywołujesz katastrofy.
 - **Stół pinów** (`pins.html`): matryca wysuwanych pinów (shape display), z której rzeźbisz powierzchnie i która manipuluje przedmiotami.
 - **Flak** (`flak.html`): obrona przeciwlotnicza na makiecie z artylerii, ze strefą wybuchów, synchronizacją salw i rolą pilota.
 - **Bitwa** (`battle.html`): dwie armie walczą same, a Ty obserwujesz i dosyłasz posiłki.
 - **Bomba w skali** (`nuke.html`): makieta 40 × 40 km z miastem i wybuch jądrowy w prawdziwych proporcjach, ze zwolnionym tempem.
+- **Bitwa średniowieczna** (`medieval.html`): miecznicy, łucznicy i włócznicy; rozstawiasz i dowodzisz oddziałami albo wcielasz się w żołnierza.
 
 Między trybami przełączasz się przyciskiem na stronie albo w menu w VR.
 
@@ -278,6 +279,52 @@ Przebieg wybuchu:
 **Tryb filmowy** sam zwalnia błysk i kulę ognia (nawet 50×), pokazuje falę w normalnym tempie i przyspiesza
 wznoszenie chmury. Tempo można też ustawiać ręcznie (0,02–40×).
 
+## Tryb: Bitwa średniowieczna
+
+Pole bitwy 480 × 640 m w skali 1:400 (1,2 × 1,6 m na stole) z pagórkami, lasami, stawem i drogą. Oddziały po
+~20 ludzi, każdy ze sztandarem w kolorze strony i literą rodzaju:
+
+| Oddział | Działanie |
+|---|---|
+| **Miecznicy** | Szybkie ciosy i tarcza, która zatrzymuje większość strzał lecących z przodu. |
+| **Włócznicy** | Dłuższy zasięg i mocniejszy pierwszy cios na nadbiegającego wroga. |
+| **Łucznicy** | Salwy po balistycznym torze z wyprzedzeniem celu, a w zwarciu walczą słabo. |
+
+Oddział, który straci 2/3 ludzi przy wrogu, **ucieka** i po kilkunastu sekundach się zbiera. Oddział stojący
+bez rozkazu albo po dojściu na miejsce sam kontratakuje wroga, który podejdzie.
+
+**Dowodzenie (widok makiety):**
+- spust na żołnierza albo sztandar: wybór oddziału;
+- spust na ziemię: marsz w to miejsce (przeciągnięcie ustawia front szyku);
+- spust na wroga: atak.
+
+**Rozstawianie:** przed startem bitwy (pauza) oddział od razu staje we wskazanym miejscu na Twojej połowie.
+Przed startem możesz rozstawić także czerwonych. W trakcie bitwy czerwoni walczą sami.
+
+Przyciski:
+- **A**: start/pauza;
+- **B**: menu (dodawanie oddziałów obu stron, gotowe armie, tempo);
+- lewy **Y**: wcielenie w żołnierza.
+
+**Wcielenie w żołnierza:** przejmujesz jednego człowieka z zaznaczonego oddziału, a świat robi się 1:1.
+- **Ruch:** chodzisz lewą gałką (albo fizycznie po pokoju), a prawą gałką obracasz się skokowo.
+- **Walka:** mieczem i włócznią bijesz spustem albo zamachem prawej ręki. Łuk napinasz, trzymając spust,
+  i strzelasz, puszczając go. Siła strzału zależy od tego, jak długo napinasz.
+- **Rozkazy:** wydajesz tylko swojemu oddziałowi, a pozostałe oddziały walczą same:
+  - lewy spust na ziemię: „tam!”;
+  - lewy spust na wroga: „atak!”;
+  - **X**: „za mną!”;
+  - **Y**: „do ataku!”.
+
+Gdy zginiesz, wracasz do widoku makiety.
+
+Na komputerze w roli żołnierza:
+- `WASD`: chód;
+- prawy przycisk myszy: rozglądanie;
+- klik: cios albo strzał;
+- `F`, `G`, `T`: rozkazy;
+- `Q`: wyjście.
+
 ## Plany na później
 
 - W trybie bitwy: samoloty i flak obu stron.
@@ -341,3 +388,4 @@ Potem otwórz na Queście `http://localhost:8000` (localhost traktowany jest jak
 - `src/flak/ui.js`, `src/flak/main.js`: panel, menu, strefa wybuchów, podgląd obraz-w-obrazie, kabina pilota i pętla trybu.
 - `src/battle/army.js`, `src/battle/main.js`: symulacja dwóch armii (piechota, czołgi, artyleria) i tryb obserwatora.
 - `src/nuke/world.js`, `src/nuke/blast.js`, `src/nuke/main.js`: makieta 40 × 40 km z miastem, model i wizualizacja wybuchu jądrowego.
+- `src/medieval/world.js`, `src/medieval/army.js`, `src/medieval/main.js`: pole bitwy, oddziały średniowieczne (szyki, walka wręcz, łucznictwo, morale), dowodzenie i wcielenie w żołnierza.

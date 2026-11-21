@@ -97,7 +97,7 @@ export class FlakMenu extends CanvasPanel {
     row([['◀ Samolot', 'plane-'], ['Samolot ▶', 'plane+'], [`Predykcja: ${o.pred ? 'wł.' : 'wył.'}`, 'pred']], y); y += 76;
     row([['Następna fala', 'wave', false, '#5a2a2a'], ['Nowa gra', 'new', false, '#5a3a2a']], y); y += 68;
     row([['Przed siebie', 'place'], ['Zamknij', 'close']], y); y += 68;
-    row([['Artyleria', 'mode:index.html', false, '#2a3a5a'], ['Katastrofy', 'mode:disasters.html', false, '#5a3a1a'], ['Piny', 'mode:pins.html', false, '#1a3a5a'], ['Bitwa', 'mode:battle.html', false, '#2a3a5a'], ['Bomba', 'mode:nuke.html', false, '#6a2a1a']], y); y += 86;
+    row([['Artyleria', 'mode:index.html', false, '#2a3a5a'], ['Katastrofy', 'mode:disasters.html', false, '#5a3a1a'], ['Piny', 'mode:pins.html', false, '#1a3a5a'], ['Bitwa', 'mode:battle.html', false, '#2a3a5a'], ['Bomba', 'mode:nuke.html', false, '#6a2a1a'], ['Miecze', 'mode:medieval.html', false, '#5a4a1a']], y); y += 86;
     c.font = '21px system-ui, sans-serif'; c.fillStyle = '#d0d8b8';
     [
       'Zsynchronizowany: wszystkie pociski wybuchają naraz.',

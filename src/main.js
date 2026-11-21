@@ -212,6 +212,7 @@ function menuAction(act) {
     case 'mode3': location.href = 'flak.html'; break;
     case 'mode4': location.href = 'battle.html'; break;
     case 'mode5': location.href = 'nuke.html'; break;
+    case 'mode6': location.href = 'medieval.html'; break;
     default: break;
   }
   saveOpts();
