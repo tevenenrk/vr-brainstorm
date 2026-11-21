@@ -5,12 +5,12 @@ import { Effects, Sound } from '../effects.js';
 import { TableManipulator } from '../table.js';
 import { CanvasPanel } from '../hud.js';
 import { Field, MW, MD, MAP_SCALE, UNIT_K } from './world.js';
-import { Army, SIDES, TYPES, ARROW_V } from './army.js';
+import { Army, SIDES, TYPES, ARROW_V, RIDER_EYE } from './army.js';
 
 const params = new URLSearchParams(location.search);
 const SHADOWS = params.get('shadows') !== '0';
 const SPEEDS = [0.25, 0.5, 1, 2, 3];
-const TYPE_KEYS = ['sword', 'bow', 'spear'];
+const TYPE_KEYS = ['sword', 'bow', 'spear', 'cav'];
 
 // ---------- panele ----------
 class MHud extends CanvasPanel {
@@ -167,7 +167,7 @@ const msg = (t, c = '#9fe8b0') => { flash = { text: t, until: clockT + 2.5, colo
 
 function preset() {
   army.clear(); state.started = false; state.paused = true; selected = null;
-  for (const side of [0, 1]) for (const t of ['spear', 'sword', 'sword', 'spear', 'bow', 'bow', 'sword']) army.addSquad(side, t);
+  for (const side of [0, 1]) for (const t of ['cav', 'spear', 'sword', 'sword', 'spear', 'bow', 'bow', 'sword', 'cav']) army.addSquad(side, t);
   msg('Armie rozstawione — możesz je przestawić, potem START');
 }
 function toggleMenu(v) { const show = v ?? !menu.mesh.visible; menu.mesh.visible = show; hud.mesh.visible = !show; document.getElementById('menu').style.display = show ? 'block' : 'none'; }
@@ -249,7 +249,9 @@ const weapons = {};
   const bow = new THREE.Group();
   bow.add(new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.015, 5, 16, Math.PI * 0.85).rotateZ(Math.PI / 2 - Math.PI * 0.425).rotateY(Math.PI / 2).translate(0, 0, 0.3), wood));
   const arrow = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.75, 4).rotateX(Math.PI / 2).translate(0, 0, -0.35), wood);
-  Object.assign(weapons, { sword: sw, spear: sp, bow, arrow });
+  const lance = new THREE.Group();
+  lance.add(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.022, 3.4, 6).rotateX(Math.PI / 2).translate(0, 0, -1.3), wood), new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.3, 6).rotateX(-Math.PI / 2).translate(0, 0, -3.15), metal), new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.09, 0.2, 8).rotateX(Math.PI / 2).translate(0, 0, -0.15), metal));
+  Object.assign(weapons, { sword: sw, spear: sp, bow, arrow, cav: lance });
   for (const w of Object.values(weapons)) w.visible = false;
 }
 function enterAvatar() {
@@ -286,7 +288,7 @@ function enterAvatar() {
     const right = ctrls.find((o) => o.hand === 'right') || ctrls[0], left = ctrls.find((o) => o.hand === 'left') || ctrls[1];
     if (player.type === 'bow') { left.grip.add(w); right.grip.add(weapons.arrow); weapons.arrow.visible = true; } else right.grip.add(w);
     w.position.set(0, 0, 0); w.rotation.set(0, 0, 0);
-  } else { camera.add(w); w.position.set(0.25, -0.28, -0.45); w.rotation.set(player.type === 'bow' ? 0 : -0.3, player.type === 'bow' ? 0.4 : 0.1, 0); }
+  } else { camera.add(w); w.position.set(0.25, -0.28, -0.45); w.rotation.set(player.type === 'bow' ? 0 : -0.3, player.type === 'bow' ? 0.4 : 0.1, 0); if (player.type === 'cav') { w.position.set(0.32, -0.42, -0.2); w.rotation.set(0.02, 0.06, 0); } }
   w.visible = true;
   msg(`Jesteś w oddziale: ${TYPES[player.type].name}`, '#ffe08a');
 }
@@ -321,7 +323,7 @@ function updateAvatar(dt) {
   // teren pod stopami na poziomie podłogi
   const g = field.heightAt(cx, cz);
   const gw = new THREE.Vector3(cx, g, cz).applyMatrix4(mapGroup.matrixWorld);
-  tableRoot.position.y -= gw.y;
+  tableRoot.position.y -= gw.y + (TYPES[player.type].mount ? RIDER_EYE : 0);
   if (cx !== hm.x || cz !== hm.z) { const ew = new THREE.Vector3(cx, hm.y, cz).applyMatrix4(mapGroup.matrixWorld); tableRoot.position.x += head.x - ew.x; tableRoot.position.z += head.z - ew.z; }
   hurt = Math.max(0, hurt - dt * 1.5);
   hurtFx.material.opacity = hurt * 0.45;
@@ -331,7 +333,7 @@ function updateAvatar(dt) {
 function locomote(mx, mz, dt) {
   const fw = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion())); fw.y = 0; fw.normalize();
   const rt = new THREE.Vector3(-fw.z, 0, fw.x);
-  const v = fw.multiplyScalar(mz).add(rt.multiplyScalar(mx)).multiplyScalar(3.2 * dt * (field.water(player.x, player.z) ? 0.5 : 1));
+  const v = fw.multiplyScalar(mz).add(rt.multiplyScalar(mx)).multiplyScalar((TYPES[player.type].mount ? 7 : 3.2) * dt * (field.water(player.x, player.z) ? 0.5 : 1));
   tableRoot.position.sub(v);
 }
 function snapTurn(a) {

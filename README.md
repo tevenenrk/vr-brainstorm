@@ -7,7 +7,7 @@ Siedem trybów na lewitującej platformie:
 - **Flak** (`flak.html`): obrona przeciwlotnicza na makiecie z artylerii, ze strefą wybuchów, synchronizacją salw i rolą pilota.
 - **Bitwa** (`battle.html`): dwie armie walczą same, a Ty obserwujesz i dosyłasz posiłki.
 - **Bomba w skali** (`nuke.html`): makieta 40 × 40 km z miastem i wybuch jądrowy w prawdziwych proporcjach, ze zwolnionym tempem.
-- **Bitwa średniowieczna** (`medieval.html`): miecznicy, łucznicy i włócznicy; rozstawiasz i dowodzisz oddziałami albo wcielasz się w żołnierza.
+- **Bitwa średniowieczna** (`medieval.html`): miecznicy, łucznicy, włócznicy i kawaleria; rozstawiasz i dowodzisz oddziałami albo wcielasz się w żołnierza.
 
 Między trybami przełączasz się przyciskiem na stronie albo w menu w VR.
 
@@ -281,14 +281,18 @@ wznoszenie chmury. Tempo można też ustawiać ręcznie (0,02–40×).
 
 ## Tryb: Bitwa średniowieczna
 
-Pole bitwy 480 × 640 m w skali 1:400 (1,2 × 1,6 m na stole) z pagórkami, lasami, stawem i drogą. Oddziały po
-~20 ludzi, każdy ze sztandarem w kolorze strony i literą rodzaju:
+Pole bitwy 480 × 640 m w skali 1:400 (1,2 × 1,6 m na stole) z pagórkami, lasami, stawem i drogą. Piesze oddziały liczą
+~20 ludzi, konne 12, każdy oddział ze sztandarem w kolorze strony i literą rodzaju:
 
 | Oddział | Działanie |
 |---|---|
 | **Miecznicy** | Szybkie ciosy i tarcza, która zatrzymuje większość strzał lecących z przodu. |
 | **Włócznicy** | Dłuższy zasięg i mocniejszy pierwszy cios na nadbiegającego wroga. |
 | **Łucznicy** | Salwy po balistycznym torze z wyprzedzeniem celu, a w zwarciu walczą słabo. |
+| **Kawaleria** | Jeźdźcy z kopiami, szybcy w galopie. Cios w pędzie (**szarża**) zawsze trafia i zadaje ×2,4 obrażeń. Po kilku sekundach zwarcia odskakują i szarżują znowu. Konie mają pancerz, więc strzały zadają im połowę obrażeń. |
+
+Kawaleria rozbija łuczników i zwykle wygrywa z miecznikami, ale **włócznicy** są jej kontrą: zadają koniom
+×2,5 obrażeń.
 
 Oddział, który straci 2/3 ludzi przy wrogu, **ucieka** i po kilkunastu sekundach się zbiera. Oddział stojący
 bez rozkazu albo po dojściu na miejsce sam kontratakuje wroga, który podejdzie.
@@ -308,7 +312,8 @@ Przyciski:
 
 **Wcielenie w żołnierza:** przejmujesz jednego człowieka z zaznaczonego oddziału, a świat robi się 1:1.
 - **Ruch:** chodzisz lewą gałką (albo fizycznie po pokoju), a prawą gałką obracasz się skokowo.
-- **Walka:** mieczem i włócznią bijesz spustem albo zamachem prawej ręki. Łuk napinasz, trzymając spust,
+- **Jeździec:** jako kawalerzysta siedzisz wyżej i poruszasz się szybciej. Cios kopią w pędzie to szarża.
+- **Walka:** mieczem, włócznią i kopią bijesz spustem albo zamachem prawej ręki. Łuk napinasz, trzymając spust,
   i strzelasz, puszczając go. Siła strzału zależy od tego, jak długo napinasz.
 - **Rozkazy:** wydajesz tylko swojemu oddziałowi, a pozostałe oddziały walczą same:
   - lewy spust na ziemię: „tam!”;

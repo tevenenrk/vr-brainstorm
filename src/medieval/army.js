@@ -12,7 +12,11 @@ export const TYPES = {
   sword: { name: 'Miecznicy', letter: 'M', hp: 100, dmg: 22, reach: 2.1 * K, cd: 1.0, walk: 1.6 * K, run: 3.6 * K, cols: 7, n: 21, shield: true },
   spear: { name: 'Włócznicy', letter: 'W', hp: 100, dmg: 19, reach: 3.3 * K, cd: 1.25, walk: 1.5 * K, run: 3.2 * K, cols: 7, n: 21, firstStrike: 1.4 },
   bow: { name: 'Łucznicy', letter: 'Ł', hp: 70, dmg: 8, reach: 1.7 * K, cd: 1.4, walk: 1.7 * K, run: 3.8 * K, cols: 9, n: 18, range: 95, arrow: 34, reload: [3.2, 4.6] },
+  // kawaleria: szarża w pędzie ×2, włócznicy zadają jej ×2,5
+  cav: { name: 'Kawaleria', letter: 'K', hp: 160, dmg: 26, reach: 2.6 * K, cd: 1.1, walk: 2.6 * K, run: 7.5 * K, cols: 6, n: 12, charge: 2.4, barding: 0.5, spx: 2.4 * K, spz: 3.6 * K, mount: true },
 };
+const ANTI_CAV = 2.5;           // mnożnik obrażeń włóczni przeciw koniom
+export const RIDER_EYE = 0.8;   // o ile wyżej siedzi jeździec (m)
 export const ARROW_V = 62;
 const SP = 1.7 * K;            // odstęp w szyku
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -31,6 +35,27 @@ function bodyGeo(type) {
     tint(new THREE.SphereGeometry(0.16, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 1.62, 0), 0.72, 0.74, 0.78),
   ];
   if (type === 'sword') P.push(tint(new THREE.BoxGeometry(0.08, 0.7, 0.55).translate(-0.42, 1.1, 0.12), 0.62, 0.45, 0.25));
+  if (type === 'cav') return horseGeo();
+  return mergeGeometries(P).scale(K, K, K);
+}
+// koń + jeździec, przód w +Z
+function horseGeo() {
+  const br = [0.42, 0.28, 0.17], dk = [0.2, 0.14, 0.1];
+  const P = [
+    tint(new THREE.BoxGeometry(0.55, 0.62, 1.7).translate(0, 1.22, 0), ...br),
+    tint(new THREE.BoxGeometry(0.6, 0.42, 1.25).translate(0, 1.1, -0.05), 1),                       // czaprak w barwach
+    tint(new THREE.BoxGeometry(0.3, 0.8, 0.36).rotateX(0.62).translate(0, 1.68, 0.86), ...br),       // szyja
+    tint(new THREE.BoxGeometry(0.26, 0.3, 0.62).rotateX(0.35).translate(0, 1.98, 1.18), ...br),      // łeb
+    tint(new THREE.BoxGeometry(0.06, 0.5, 0.12).translate(0, 1.82, 0.78), ...dk),                    // grzywa
+    tint(new THREE.BoxGeometry(0.1, 0.6, 0.12).rotateX(0.45).translate(0, 1.1, -0.98), ...dk),       // ogon
+    tint(new THREE.BoxGeometry(0.66, 0.22, 0.34).translate(0, 1.62, -0.05), 0.3, 0.27, 0.24),        // nogi jeźdźca
+    tint(new THREE.BoxGeometry(0.46, 0.62, 0.3).translate(0, 2.02, -0.05), 1),                       // tułów
+    tint(new THREE.BoxGeometry(0.13, 0.52, 0.13).translate(-0.31, 2.0, 0.0), 1),                     // lewe ramię
+    tint(new THREE.BoxGeometry(0.06, 0.6, 0.45).translate(-0.4, 1.95, 0.08), 0.62, 0.45, 0.25),      // tarcza
+    tint(new THREE.SphereGeometry(0.14, 8, 6).translate(0, 2.47, -0.05), 1, 0.85, 0.72),
+    tint(new THREE.SphereGeometry(0.16, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 2.49, -0.05), 0.72, 0.74, 0.78),
+  ];
+  for (const [x, z] of [[-0.18, 0.66], [0.18, 0.66], [-0.18, -0.64], [0.18, -0.64]]) P.push(tint(new THREE.BoxGeometry(0.14, 0.95, 0.15).translate(x, 0.47, z), ...br));
   return mergeGeometries(P).scale(K, K, K);
 }
 // broń: pivot w barku (0.33, 1.4), oś obrotu X
@@ -38,6 +63,7 @@ function weaponGeo(type) {
   let P;
   if (type === 'sword') P = [tint(new THREE.BoxGeometry(0.05, 0.05, 0.85).translate(0, 0, 0.55), 0.85, 0.87, 0.9), tint(new THREE.BoxGeometry(0.22, 0.04, 0.04).translate(0, 0, 0.12), 0.4, 0.32, 0.2)];
   else if (type === 'spear') P = [tint(new THREE.CylinderGeometry(0.025, 0.025, 2.6, 5).rotateX(Math.PI / 2).translate(0, 0, 0.8), 0.45, 0.33, 0.2), tint(new THREE.ConeGeometry(0.05, 0.25, 5).rotateX(Math.PI / 2).translate(0, 0, 2.2), 0.85, 0.87, 0.9)];
+  else if (type === 'cav') P = [tint(new THREE.CylinderGeometry(0.035, 0.025, 3.4, 5).rotateX(Math.PI / 2).translate(0, 0, 1.0), 0.55, 0.4, 0.25), tint(new THREE.ConeGeometry(0.05, 0.3, 5).rotateX(Math.PI / 2).translate(0, 0, 2.85), 0.85, 0.87, 0.9), tint(new THREE.CylinderGeometry(0.09, 0.03, 0.2, 6).rotateX(Math.PI / 2).translate(0, 0, -0.05), 0.75, 0.76, 0.8)];
   else P = [tint(new THREE.TorusGeometry(0.55, 0.02, 4, 12, Math.PI * 0.9).rotateZ(Math.PI / 2 - Math.PI * 0.45).rotateY(Math.PI / 2).translate(0, 0, 0.25), 0.45, 0.32, 0.18)];
   return mergeGeometries(P).scale(K, K, K);
 }
@@ -75,7 +101,7 @@ export class Army {
     const sq = { id: this.nextId++, side, type, ax: x, az: z, facing: side === 0 ? Math.PI : 0, order: null, soldiers: [], routed: false, routT: 0, aiT: 0, size0: T.n };
     for (let i = 0; i < T.n; i++) {
       const col = i % T.cols, row = Math.floor(i / T.cols);
-      const s = { sq, side, type, slot: [(col - (T.cols - 1) / 2) * SP, -row * SP], x: 0, z: 0, yaw: sq.facing, hp: T.hp, state: 'alive', t: 0, cd: rnd(0, 1.5), anim: 0, target: null, look: Math.random() * 0.5, vx: 0, vz: 0, fall: new THREE.Vector3(1, 0, 0), phase: Math.random() * 6 };
+      const s = { momentum: 0, sq, side, type, slot: [(col - (T.cols - 1) / 2) * (T.spx || SP), -row * (T.spz || SP)], x: 0, z: 0, yaw: sq.facing, hp: T.hp, state: 'alive', t: 0, cd: rnd(0, 1.5), anim: 0, target: null, look: Math.random() * 0.5, vx: 0, vz: 0, fall: new THREE.Vector3(1, 0, 0), phase: Math.random() * 6 };
       const p = this.slotPos(sq, s);
       s.x = p[0]; s.z = p[1];
       sq.soldiers.push(s); this.soldiers.push(s);
@@ -147,6 +173,7 @@ export class Army {
     // morale: duże straty -> ucieczka
     if (!sq.routed && alive.length < sq.size0 * 0.33 && this.enemyNear(sq, 25)) { sq.routed = true; sq.routT = 12; sq.order = null; }
     if (sq.routed) {
+      sq.withdraw = 0;
       sq.routT -= dt;
       const S = SIDES[sq.side];
       const [cx, cz] = this.center(sq);
@@ -174,8 +201,16 @@ export class Army {
       const [ex, ez] = this.center(o.squad);
       const d = Math.hypot(ex - sq.ax, ez - sq.az);
       if (sq.type === 'bow') { if (d > T.range * 0.85) { tx = ex; tz = ez; } else if (d < 30) { tx = sq.ax - (ex - sq.ax) / d * 20; tz = sq.az - (ez - sq.az) / d * 20; } }
-      else { tx = ex; tz = ez; if (d < 40) speed = T.run; }
+      else { tx = ex; tz = ez; if (d < (T.mount ? 130 : 40)) speed = T.run; }
       wantFacing = Math.atan2(ex - sq.ax, ez - sq.az);
+      // jazda: po kilku sekundach zwarcia odskakuje i szarżuje ponownie
+      if (T.mount) {
+        if (sq.withdraw > 0) {
+          sq.withdraw -= dt;
+          tx = sq.ax - (ex - sq.ax) / (d || 1) * 40; tz = sq.az - (ez - sq.az) / (d || 1) * 40; speed = T.run;
+          wantFacing = Math.atan2(tx - sq.ax, tz - sq.az);
+        } else if (d < 12) { sq.melee = (sq.melee || 0) + dt; if (sq.melee > 7) { sq.melee = 0; sq.withdraw = 5; } }
+      }
     } else if (o.type === 'follow' && o.soldier) {
       const p = o.soldier;
       tx = p.x - Math.sin(p.yaw) * 6; tz = p.z - Math.cos(p.yaw) * 6;
@@ -211,10 +246,10 @@ export class Army {
     const engaged = o && o.type === 'attack' && !sq.routed;
     if (s.look <= 0) {
       s.look = 0.3 + Math.random() * 0.3;
-      const r = sq.routed ? 0 : s.type === 'bow' ? 6 : engaged ? 16 : 7;
+      const r = sq.routed || sq.withdraw > 0 ? 0 : s.type === 'bow' ? 6 : engaged ? (T.mount ? 22 : 16) : 7;
       s.target = r ? this.nearestEnemy(s, r) : null;
     }
-    if (s.target && s.target.state !== 'alive') s.target = null;
+    if (s.target && (s.target.state !== 'alive' || sq.withdraw > 0)) s.target = null;
     let gx, gz, speed = T.walk * 1.4;
     if (s.target) {
       const t = s.target, d = Math.hypot(t.x - s.x, t.z - s.z);
@@ -223,9 +258,12 @@ export class Army {
       else { gx = s.x; gz = s.z; }
       if (d <= T.reach && s.cd <= 0) {
         s.cd = T.cd * rnd(0.85, 1.2); s.anim = 1;
-        if (Math.random() < 0.68) {
+        const charging = T.charge && s.momentum > 0.35;
+        if (charging || Math.random() < 0.68) {
           let dmg = T.dmg * rnd(0.8, 1.2);
           if (T.firstStrike && t.type !== 'spear' && d > TYPES[t.type].reach) dmg *= T.firstStrike;
+          if (s.type === 'spear' && TYPES[t.type].mount) dmg *= ANTI_CAV;
+          if (charging) { dmg *= T.charge; s.momentum = 0; this.charges = (this.charges || 0) + 1; }
           this.damage(t, dmg, s);
         }
         if (this.onHit && Math.random() < 0.25) this.onHit(s);
@@ -253,15 +291,17 @@ export class Army {
       if (!s.target) s.yaw += wrap(Math.atan2(dx, dz) - s.yaw) * Math.min(1, dt * 6);
     } else if (!s.target) s.yaw += wrap(sq.facing - s.yaw) * Math.min(1, dt * 3);
     // rozpychanie
-    this.near(s.x, s.z, 2, (o2) => {
+    const rs = T.mount ? 1.3 * K : 0.75 * K;
+    this.near(s.x, s.z, 2.3 * K, (o2) => {
       if (o2 === s) return;
-      const ox = s.x - o2.x, oz = s.z - o2.z, dd = Math.hypot(ox, oz);
-      if (dd < 0.75 * K && dd > 1e-4) { const f = (0.75 * K - dd) / dd * 3; vx += ox * f; vz += oz * f; }
+      const ox = s.x - o2.x, oz = s.z - o2.z, dd = Math.hypot(ox, oz), r = TYPES[o2.type].mount ? Math.max(rs, 1.3 * K) : rs;
+      if (dd < r && dd > 1e-4) { const f = (r - dd) / dd * 3; vx += ox * f; vz += oz * f; }
     });
     s.vx = vx; s.vz = vz;
+    if (T.charge) s.momentum = Math.hypot(vx, vz) > T.run * 0.6 ? 1 : Math.max(0, s.momentum - dt * 1.2);
     s.x += vx * dt; s.z += vz * dt;
     s.x = Math.max(-MW / 2 + 1, Math.min(MW / 2 - 1, s.x)); s.z = Math.max(-MD / 2 + 1, Math.min(MD / 2 - 1, s.z));
-    s.phase += Math.hypot(vx, vz) * dt * 2;
+    s.phase += Math.hypot(vx, vz) * dt * (T.mount ? 0.9 : 2);
   }
 
   damage(t, dmg, from) {
@@ -313,14 +353,15 @@ export class Army {
         a.vel.y -= G * h;
         a.pos.addScaledVector(a.vel, h);
         let hit = null;
-        this.near(a.pos.x, a.pos.z, 1.2, (s) => {
+        this.near(a.pos.x, a.pos.z, 1.2 * K, (s) => {
           if (hit || s.side === a.side || s.state !== 'alive') return;
-          const sy = F.heightAt(s.x, s.z);
-          if (Math.hypot(s.x - a.pos.x, s.z - a.pos.z) < 0.6 * K && a.pos.y > sy && a.pos.y < sy + 1.8 * K) hit = s;
+          const sy = F.heightAt(s.x, s.z), m = TYPES[s.type].mount;
+          if (Math.hypot(s.x - a.pos.x, s.z - a.pos.z) < (m ? 1.05 : 0.6) * K && a.pos.y > sy && a.pos.y < sy + (m ? 2.7 : 1.8) * K) hit = s;
         });
         if (hit) {
           let dmg = TYPES.bow.arrow * rnd(0.8, 1.2);
           // tarcza: strzała z przodu dużo słabsza
+          if (TYPES[hit.type].barding) dmg *= TYPES[hit.type].barding;
           if (TYPES[hit.type].shield) { const f = Math.sin(hit.yaw) * -a.vel.x + Math.cos(hit.yaw) * -a.vel.z; if (f > 0.3 * a.vel.length()) dmg *= 0.25; }
           this.damage(hit, dmg, a.shooter);
           this.arrows.splice(i, 1);
@@ -343,7 +384,10 @@ export class Army {
       if (o.side === p.side || o.state !== 'alive') return;
       const dx = o.x - p.x, dz = o.z - p.z, d = Math.hypot(dx, dz);
       if (d > reach || (dx * dirX + dz * dirZ) / (d || 1) < 0.45) return;
-      this.damage(o, T.dmg * 1.25, p); hits++;
+      let dmg = T.dmg * 1.25;
+      if (p.type === 'spear' && TYPES[o.type].mount) dmg *= ANTI_CAV;
+      if (T.charge && Math.hypot(p.vx, p.vz) > T.run * 0.45) dmg *= T.charge;
+      this.damage(o, dmg, p); hits++;
     });
     return hits;
   }
@@ -377,7 +421,7 @@ export class Army {
         this._q.premultiply(this._q2);
         y += 0.15 * K;
         this._c.multiplyScalar(0.45);
-      } else y += Math.abs(Math.sin(s.phase)) * 0.06 * K;
+      } else y += Math.abs(Math.sin(s.phase)) * (TYPES[s.type].mount ? 0.14 : 0.06) * K;
       this._p.set(s.x, y, s.z);
       this._m.compose(this._p, this._q, this._s);
       M.body.setMatrixAt(i, this._m); M.body.setColorAt(i, this._c);
@@ -387,6 +431,7 @@ export class Army {
       let off;
       if (s.type === 'sword') { wq.setFromAxisAngle(this._x, -0.9 + sw * 1.8); off = new THREE.Vector3(0.33 * K, 1.35 * K, 0.05 * K); }
       else if (s.type === 'spear') { wq.setFromAxisAngle(this._x, 0.15); off = new THREE.Vector3(0.3 * K, 1.25 * K, (-0.5 + sw * 0.6) * K); }
+      else if (s.type === 'cav') { wq.setFromAxisAngle(this._x, s.momentum > 0.35 ? 0.04 : -0.35 + sw * 0.4); off = new THREE.Vector3(0.32 * K, 2.12 * K, (-0.3 + sw * 0.7) * K); }
       else { wq.setFromAxisAngle(this._up, 0.15); off = new THREE.Vector3(-0.32 * K, 1.25 * K, 0.1 * K); }
       if (s.state === 'dead') { this._m.makeScale(0, 0, 0); }
       else { const q = this._q.clone().multiply(wq); this._m.compose(this._p.clone().add(off.applyQuaternion(this._q)), q, this._s); }
