@@ -339,12 +339,18 @@ Horror na Twój prawdziwy pokój. Strona prosi o dostęp do skanu przestrzeni (W
 **Przebieg:**
 1. Pokój lekko ciemnieje i zaczyna buczeć niskie tło.
 2. Za drzwiami słychać ciężkie, zbliżające się kroki (dźwięk przestrzenny).
-3. Drzwi skrzypią i uchylają się. W szczelinie widać ciemny korytarz i świecące oczy, a po podłodze wypływa mgła.
-4. Kostucha wychodzi i powoli (0,5 m/s) idzie do Ciebie. Omija meble ze skanu (siatka nawigacyjna z marginesem
-   i A*), a gdy się ruszasz, przelicza trasę. Pokój ciemnieje, a bicie serca przyspiesza.
-5. Z odległości ok. 1,5 m unosi kosę i mówi **„Już czas”**.
+3. Rama drzwi zapala się jak **płonący prostokąt** i środek wypala się w portal. Za nim jest ciemny,
+   rozżarzony korytarz, w którym stoi kostucha z żarzącymi się oczami.
+4. Kostucha przechodzi przez ogień i powoli (0,5 m/s) idzie do Ciebie. Omija meble ze skanu (siatka nawigacyjna
+   z marginesem i A*), a gdy się ruszasz, przelicza trasę. Gdy jest już w pokoju, portal gaśnie.
+   Pokój ciemnieje, a bicie serca przyspiesza.
+5. Z odległości ok. 1,8 m unosi kosę i mówi **„Już czas”**.
 6. Tnie poziomo na wysokości szyi. W chwili cięcia obraz robi się **całkowicie czarny**.
-7. Po kilku sekundach pojawia się napis „Spust — jeszcze raz”.
+7. Po kilku sekundach w oddali pojawia się małe światło. Rośnie i oświetla otoczenie, a wtedy widać, że stoisz
+   w ciemnym tunelu.
+8. Światło zbliża się najpierw powoli, potem coraz szybciej, aż wszystko zalewa biały blask i pojawia się
+   napis **„Carpe diem”**.
+9. Spust zaczyna scenę od nowa.
 
 **Zasłanianie:** meble i ściany ze skanu są w scenie jako niewidoczne bryły. Kostucha chowa się za kanapą,
 a zza drzwi widać ją tylko przez uchyloną szczelinę.
@@ -372,6 +378,11 @@ Na komputerze:
 - `K`: skan i ścieżka;
 - `P`: wskaż drzwi;
 - `Esc`: przerwij.
+
+Postać to model `assets/reaper/reaper.glb` (szkielet Mixamo z animacją biegu, tekstury skompresowane do WebP,
+ok. 2 MB). Chód powstaje ze zwolnionego biegu o zmniejszonym zasięgu ruchów. Kosa jest dorobiona w kodzie, a ręce
+trzymają ją dzięki kinematyce odwrotnej (IK). Oczy żarzą się, a głowa śledzi gracza. Jeśli modelu nie uda się
+wczytać, pojawia się prosta kostucha zastępcza.
 
 Głos „Już czas” to plik `assets/reaper/juz_czas.mp3` (syntezator mowy obniżony i z pogłosem). Możesz go podmienić
 na własne nagranie o tej samej nazwie. Jeśli pliku brak, mówi syntezator przeglądarki.
@@ -440,4 +451,9 @@ Potem otwórz na Queście `http://localhost:8000` (localhost traktowany jest jak
 - `src/battle/army.js`, `src/battle/main.js`: symulacja dwóch armii (piechota, czołgi, artyleria) i tryb obserwatora.
 - `src/nuke/world.js`, `src/nuke/blast.js`, `src/nuke/main.js`: makieta 40 × 40 km z miastem, model i wizualizacja wybuchu jądrowego.
 - `src/medieval/world.js`, `src/medieval/army.js`, `src/medieval/main.js`: pole bitwy, oddziały średniowieczne (szyki, walka wręcz, łucznictwo, morale), dowodzenie i wcielenie w żołnierza.
-- `src/reaper/room.js`, `src/reaper/reaper.js`, `src/reaper/audio.js`, `src/reaper/main.js`: tryb Kostucha. Odczyt skanu pokoju z WebXR, siatka nawigacyjna z A*, model i animacja kostuchy, dźwięki proceduralne, portal w drzwiach (stencil) i przebieg sceny.
+- `src/reaper/room.js`, `src/reaper/reaper.js`, `src/reaper/fire.js`, `src/reaper/afterlife.js`, `src/reaper/audio.js`, `src/reaper/main.js`: tryb Kostucha.
+  - Odczyt skanu pokoju z WebXR i siatka nawigacyjna z A*.
+  - Model z IK rąk i kosą.
+  - Płonący portal w drzwiach (stencil, cząsteczki ognia).
+  - Tunel ze światłem i „Carpe diem”.
+  - Dźwięki proceduralne i przebieg sceny.

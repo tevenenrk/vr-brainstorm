@@ -2,11 +2,13 @@ import * as THREE from 'three';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import { CanvasPanel } from '../hud.js';
 import { Room, NavGrid, itemsFromXR, simulatedItems } from './room.js';
-import { Reaper, POSES, lerpPose } from './reaper.js';
+import { Reaper, POSES, SWING, lerpPose, loadModel } from './reaper.js';
+import { FirePortal, K_FULL } from './fire.js';
+import { Afterlife, T_LIGHT } from './afterlife.js';
 import { ReaperAudio } from './audio.js';
 
 const params = new URLSearchParams(location.search);
-const STOP = 1.55;          // odległość, z której kostucha tnie
+const STOP = 1.85;          // odległość, z której kostucha tnie
 const WALK_V = 0.5;         // m/s — powolny krok
 const STEP_LEN = 0.62;
 const BEHIND = 6.2;         // skąd słychać pierwsze kroki (za drzwiami)
@@ -71,6 +73,14 @@ faceLight.position.set(0, 2.2, 0.9);
 reaper.root.add(faceLight);
 reaper.root.visible = false;
 const audio = new ReaperAudio(camera, scene);
+const fireP = new FirePortal();
+const afterlife = new Afterlife(scene, camera);
+let modelState = 'ładowanie';
+loadModel('./assets/reaper/reaper.glb').then((g) => {
+  reaper.useModel(g);
+  reaper.root.traverse((o) => { if (o.material) reaperMats.add(o.material); });
+  reaperStencil = null; modelState = 'ok';
+}).catch((e) => { console.warn('Model kostuchy niedostępny', e); modelState = 'błąd'; });
 
 // zaciemnienie pokoju (rysowane jako pierwsze, przyciemnia obraz z kamer) i czerń po cięciu
 const darkMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide, depthTest: false, depthWrite: false, transparent: false, opacity: 0,
@@ -79,10 +89,6 @@ const dark = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 8), darkMat);
 dark.renderOrder = -100; dark.frustumCulled = false; camera.add(dark);
 const black = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 8), new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide, depthTest: false, depthWrite: false }));
 black.renderOrder = 10000; black.frustumCulled = false; black.visible = false; camera.add(black);
-const endPanel = new CanvasPanel(640, 150, 0.6);
-{ const c = endPanel.ctx; c.clearRect(0, 0, 640, 150); c.fillStyle = '#5a1410'; c.font = 'italic 40px Georgia, serif'; c.textAlign = 'center'; c.fillText('Spust — jeszcze raz', 320, 90); endPanel.tex.needsUpdate = true; }
-endPanel.mesh.material.depthTest = false; endPanel.mesh.renderOrder = 10001; endPanel.mesh.visible = false;
-scene.add(endPanel.mesh);
 
 const panel = new Panel();
 scene.add(panel.mesh);
@@ -95,19 +101,19 @@ const wallMat = new THREE.MeshLambertMaterial({ color: 0x4a4744, side: THREE.Dou
 const doorClosedMat = new THREE.MeshLambertMaterial({ color: 0x5a3c26, ...S1, stencilFunc: THREE.NotEqualStencilFunc });
 const floorMat = new THREE.MeshLambertMaterial({ color: 0x2c2a28 });
 const trimMat = new THREE.MeshLambertMaterial({ color: 0x3a2818 });
-const portalMat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, side: THREE.DoubleSide, stencilWrite: true, stencilRef: 1, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp });
 const tunnelMat = new THREE.ShaderMaterial({
-  side: THREE.BackSide, ...S1, stencilFunc: THREE.EqualStencilFunc,
+  side: THREE.BackSide, ...S1, stencilFunc: THREE.EqualStencilFunc, uniforms: { fire: { value: 0 } },
   vertexShader: 'varying vec3 vL; void main(){ vL = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-  fragmentShader: `varying vec3 vL;
+  fragmentShader: `uniform float fire; varying vec3 vL;
     void main(){
       float d = clamp(-vL.z / 5.0, 0.0, 1.0);
       float fl = smoothstep(0.3, 0.0, vL.y) * 0.6;
-      vec3 c = vec3(0.05, 0.055, 0.068) * (1.0 + fl);
-      gl_FragColor = vec4(mix(c, vec3(0.0), pow(d, 0.55)), 1.0);
+      vec3 c = vec3(0.05, 0.045, 0.05) * (1.0 + fl);
+      c = mix(c, vec3(0.0), pow(d, 0.55));
+      c += vec3(0.42, 0.08, 0.02) * exp(vL.z * 1.1) * fire;
+      gl_FragColor = vec4(c, 1.0);
     }`,
 });
-const leafMat = new THREE.MeshLambertMaterial({ color: 0x2a1c12, ...S1, stencilFunc: THREE.EqualStencilFunc });
 // materiały kostuchy: za progiem widać ją tylko przez otwór drzwi
 const reaperMats = new Set();
 reaper.root.traverse((o) => { if (o.material) reaperMats.add(o.material); });
@@ -136,6 +142,7 @@ const user = new THREE.Vector3(0, 1.65, 0);     // pozycja głowy gracza (świat
 const look = { yaw: 0, pitch: 0 };
 const rp = { pos: new THREE.Vector3(), yaw: 0, path: null, wp: 1, replan: 0, stepAcc: 0, openA: 0, swingFired: false, voiced: false, voiceAt: 0 };
 let swingAt = 3.5, cutDone = false, endShown = false, lastSig = '', scanTimer = 0, items = [];
+let portalK = 0, fireK = 0, closeT = -1, glared = false;
 
 function setUserFromCamera() {
   if (renderer.xr.isPresenting) camera.getWorldPosition(user);
@@ -149,7 +156,7 @@ function geoFromTris(tris) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(a, 3)); g.computeVertexNormals();
   return g;
 }
-function clearGroup(g) { for (const c of [...g.children]) { g.remove(c); c.traverse((o) => o.geometry?.dispose()); } }
+function clearGroup(g) { for (const c of [...g.children]) { g.remove(c); if (c !== fireP.group) c.traverse((o) => { if (o !== fireP.points) o.geometry?.dispose(); }); } }
 function buildRoom(newItems) {
   items = newItems;
   room = new Room(items, user);
@@ -182,7 +189,7 @@ function chooseDoor() {
   } else { door = room.fallbackDoor(user, fwd()); doorSource = room.walls.length ? 'wall' : 'portal'; }
   buildDoor();
 }
-let portal = null, leaf = null, closedDoor = null;
+let closedDoor = null;
 function buildDoor() {
   clearGroup(doorGroup);
   const { c, n, w, h } = door;
@@ -190,29 +197,25 @@ function buildDoor() {
   const g = new THREE.Group();
   g.position.copy(c); g.rotation.y = rotY;
   doorGroup.add(g);
-  portal = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).translate(-0.5, 0.5, 0), portalMat);
-  portal.position.set(w / 2, 0, 0.015); portal.scale.set(1e-4, h, 1); portal.renderOrder = -3;
+  fireP.build(door);
   const tunnel = new THREE.Mesh(new THREE.BoxGeometry(w + 0.7, h + 0.45, BEHIND + 1.2).translate(0, (h + 0.45) / 2 - 0.01, -(BEHIND + 1.2) / 2), tunnelMat);
   tunnel.renderOrder = -1;
-  leaf = new THREE.Mesh(new THREE.BoxGeometry(w - 0.02, h - 0.02, 0.04).translate((w - 0.02) / 2, (h - 0.02) / 2, -0.03), leafMat);
-  leaf.position.set(-w / 2 + 0.01, 0, 0); leaf.renderOrder = -1;
   closedDoor = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.03).translate(0, h / 2, 0.012), doorClosedMat);
   closedDoor.renderOrder = -2; closedDoor.userData.kind = 'visual';
   const trim = new THREE.Group(); trim.userData.kind = 'visual';
   for (const [x, y, sx, sy] of [[-w / 2 - 0.04, h / 2, 0.08, h + 0.08], [w / 2 + 0.04, h / 2, 0.08, h + 0.08], [0, h + 0.04, w + 0.16, 0.08]]) { const b = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, 0.05), trimMat); b.position.set(x, y, 0.02); trim.add(b); }
-  g.add(portal, tunnel, leaf, closedDoor, trim);
+  g.add(fireP.group, tunnel, closedDoor, trim);
   // podgląd skanu: drzwi
   const r = [[-w / 2, 0], [w / 2, 0], [w / 2, h], [-w / 2, h], [-w / 2, 0]].map(([x, y]) => new THREE.Vector3(x, y, 0.02));
   const dl = new THREE.Line(new THREE.BufferGeometry().setFromPoints(r), new THREE.LineBasicMaterial({ color: 0xff3a3a, depthTest: false }));
   dl.renderOrder = 41; g.add(dl); dl.userData.kind = 'debug';
   applyMode();
-  setDoorOpen(0);
+  setPortal(0, 0);
 }
-function setDoorOpen(a) {
-  rp.openA = a;
-  if (!portal) return;
-  portal.scale.x = Math.max(1e-4, Math.min(door.w, door.w * (1 - Math.cos(a)) + (a > 0.01 ? 0.02 : 0)));
-  leaf.rotation.y = a;
+function setPortal(k, f) {
+  portalK = k; fireK = f;
+  fireP.set(k, f);
+  tunnelMat.uniforms.fire.value = f;
 }
 // AR: okludery niewidoczne (tylko głębia), wnętrze pokoju to obraz z kamer
 function applyMode() {
@@ -227,11 +230,12 @@ function applyMode() {
 
 // ---------- sekwencja ----------
 function resetVisuals() {
-  black.visible = false; endPanel.mesh.visible = false; endShown = false; cutDone = false;
+  black.visible = false; endShown = false; cutDone = false; closeT = -1; glared = false;
+  afterlife.stop(); roomGroup.visible = doorGroup.visible = true;
   hemi.intensity = 0.9; key.intensity = 1.4; faceLight.intensity = 1.2;
   for (const f of fog) { f.life = 0; f.s.visible = false; }
   reaper.pose = { ...POSES.carry }; reaper.twist = 0; reaper.head.rotation.set(0, 0, 0);
-  setDoorOpen(0);
+  setPortal(0, 0);
 }
 function startSequence() {
   audio.resume();
@@ -315,12 +319,13 @@ function update(dt) {
     targetDark = 0.3; audio.droneLevel = 0.4;
     const t = door.c.clone().addScaledVector(door.n, -0.75);
     moving = true;
-    if (walkTo(t.x, t.z, dt) < 0.02) { setPhase('open'); audio.creak(door.c.clone().setY(room.floorY + 1)); }
-  } else if (ph === 'open') {
+    if (walkTo(t.x, t.z, dt) < 0.02) { setPhase('ignite'); audio.ignite(door.c.clone().setY(room.floorY + 1)); }
+  } else if (ph === 'ignite') {
+    // drzwi zapłonęły: płonący prostokąt, wnętrze wypala się w portal
     targetDark = 0.35;
-    setDoorOpen(ease(clamp01(state.t / 2.3)) * 1.75);
-    if (state.t > 0.6) spawnFog(dt, 6);
-    if (state.t > 3.8) setPhase('emerge');
+    setPortal(K_FULL * ease(clamp01((state.t - 0.5) / 1.9)), clamp01(state.t / 0.7));
+    if (state.t > 1.2) spawnFog(dt, 3);
+    if (state.t > 4.0) setPhase('emerge');
   } else if (ph === 'emerge') {
     targetDark = 0.4; moving = true; spawnFog(dt, 4);
     const t = door.c.clone().addScaledVector(door.n, 0.55);
@@ -357,18 +362,33 @@ function update(dt) {
     const k = clamp01(state.t / 0.42), a = clamp01(state.t / 0.17);
     const neck = THREE.MathUtils.clamp(user.y - room.floorY - 0.2, 0.9, 1.85);
     const yaw = -2.3 + 3.6 * k * k;
-    reaper.pose = { px: THREE.MathUtils.lerp(POSES.windup.px, -0.05, a), py: THREE.MathUtils.lerp(POSES.windup.py, neck, a), pz: THREE.MathUtils.lerp(POSES.windup.pz, 0.16, a), pitch: THREE.MathUtils.lerp(POSES.windup.pitch, Math.PI / 2, a), yaw, lh: 1 };
+    reaper.pose = { px: THREE.MathUtils.lerp(POSES.windup.px, SWING.px, a), py: THREE.MathUtils.lerp(POSES.windup.py, neck, a), pz: THREE.MathUtils.lerp(POSES.windup.pz, SWING.pz, a), pitch: THREE.MathUtils.lerp(POSES.windup.pitch, Math.PI / 2, a), yaw, lh: 1 };
     reaper.twist = THREE.MathUtils.clamp(yaw * 0.25, -0.5, 0.35);
-    if (yaw >= -0.42 && !cutDone) cut();
+    // cięcie: ostrze przechodzi przez szyję gracza
+    const mid = reaper.root.localToWorld(reaper.scytheLocal(0.5, 1.27, 0, new THREE.Vector3()));
+    if (!cutDone && (Math.hypot(mid.x - user.x, mid.z - user.z) < 0.35 || yaw >= 0.25)) cut();
   } else if (ph === 'black') {
-    if (state.t > 4.5 && !endShown) {
-      endShown = true;
-      const f = fwd(); f.y = 0; f.normalize();
-      endPanel.mesh.position.copy(camera.getWorldPosition(new THREE.Vector3())).addScaledVector(f, 1.6);
-      endPanel.mesh.lookAt(camera.getWorldPosition(new THREE.Vector3()));
-      endPanel.mesh.visible = true;
+    if (state.t > T_LIGHT) {
+      // po ciemności: tunel i światło
+      const f = fwd(); f.y = 0; if (f.lengthSq() < 1e-4) f.set(0, 0, -1); f.normalize();
+      black.visible = false; roomGroup.visible = doorGroup.visible = false;
+      afterlife.start(user, Math.atan2(-f.x, -f.z));
+      setPhase('light');
     }
+  } else if (ph === 'light') {
+    const r = afterlife.update(dt, user);
+    audio.padLevel = 0.05 + 0.6 * r.light + 0.4 * r.approach;
+    if (r.glare > 0 && !glared) { glared = true; audio.glare(); }
+    endShown = r.done;
   }
+  // portal gaśnie, gdy kostucha jest już w pokoju
+  if (door && ['emerge', 'walk', 'raise', 'swing'].includes(ph)) {
+    const inRoom = rp.pos.clone().sub(door.c).dot(door.n);
+    if (closeT < 0 && inRoom > 1.4) closeT = 0;
+    if (closeT >= 0) { closeT += dt; setPortal(K_FULL * (1 - ease(clamp01((closeT - 0.6) / 2.2))), Math.max(0, 1 - closeT / 2.8)); }
+  }
+  if (door) audio.setFirePos(door.c.clone().setY(room.floorY + door.h * 0.5));
+  audio.fireLevel = ph === 'black' || ph === 'light' ? 0 : fireK;
   // kostucha: pozycja, widoczność przez próg
   reaper.root.position.set(rp.pos.x, room ? room.floorY : 0, rp.pos.z);
   reaper.root.rotation.y = rp.yaw;
@@ -379,15 +399,21 @@ function update(dt) {
     hemi.intensity = 0.9 * (0.15 + 0.85 * lightK); key.intensity = 1.4 * lightK; faceLight.intensity = 1.2 * (0.25 + 0.75 * lightK);
   }
   reaper.lookAt = ph === 'steps' || ph === 'wait' ? null : user;
-  reaper.update(dt, moving);
+  reaper.viewer = user;
+  reaper.update(dt, moving, WALK_V);
   updateFog(dt);
+  fireP.update(dt, pointScale());
   // tętno i ciemność
-  audio.bpm = ph === 'walk' ? 64 + 80 * clamp01(1 - (dUser - STOP) / 3.5) * (dUser < 5 ? 1 : 0) : ph === 'raise' || ph === 'swing' ? 150 : ph === 'open' || ph === 'emerge' ? 72 : 0;
+  audio.bpm = ph === 'walk' ? 64 + 80 * clamp01(1 - (dUser - STOP) / 3.5) * (dUser < 5 ? 1 : 0) : ph === 'raise' || ph === 'swing' ? 150 : ph === 'ignite' || ph === 'emerge' ? 72 : 0;
   audio.update(dt);
   state.flicker = Math.max(0, state.flicker - dt);
-  if (ph === 'setup' || ph === 'black') targetDark = 0;
+  if (ph === 'setup' || ph === 'black' || ph === 'light') targetDark = 0;
   state.darkness += (targetDark - state.darkness) * Math.min(1, dt * 1.2);
   darkMat.opacity = Math.min(0.92, state.darkness + (state.flicker > 0 ? 0.3 : 0));
+}
+function pointScale() {
+  if (renderer.xr.isPresenting) { const c0 = renderer.xr.getCamera().cameras[0]; if (c0) return (c0.viewport.w * c0.projectionMatrix.elements[5]) / 2; }
+  return (renderer.domElement.height * camera.projectionMatrix.elements[5]) / 2;
 }
 function cut() {
   cutDone = true;
@@ -395,6 +421,7 @@ function cut() {
   audio.cut();
   black.visible = true;
   reaper.root.visible = false;
+  setPortal(0, 0);
   for (const f of fog) { f.life = 0; f.s.visible = false; }
   for (const o of ctrls) { pulse(o, 1, 220); }
   setPhase('black');
@@ -409,6 +436,7 @@ function panelLines() {
     const ds = { auto: `Drzwi: znalezione w skanie${room.doors.length > 1 ? ` (${room.doors.length}, wybrane najdalsze)` : ''}`, manual: 'Drzwi: wskazane ręcznie', wall: 'Drzwi: brak w skanie — wejdzie z najdalszej ściany', portal: 'Drzwi: brak — otworzy się portal przed Tobą' }[doorSource];
     L.push([ds, doorSource === 'auto' || doorSource === 'manual' ? '#9fe0a0' : '#ffb070']);
   }
+  if (modelState !== 'ok') L.push([modelState === 'błąd' ? 'Model kostuchy: błąd wczytania (zastępczy)' : 'Model kostuchy: wczytywanie…', '#ffb070']);
   L.push([state.voice === 'tts' ? 'Głos: syntezator przeglądarki' : 'Stań na środku pokoju i naciśnij START.', '#a8908a']);
   return L;
 }
@@ -476,7 +504,7 @@ function ctrlRay(o) {
 }
 function onTrigger(o) {
   audio.resume();
-  if (state.phase === 'black') { if (endShown) startSequence(); return; }
+  if (state.phase === 'black' || state.phase === 'light') { if (endShown) startSequence(); return; }
   if (state.phase !== 'setup') return;
   const [p, d] = ctrlRay(o);
   raycaster.set(p, d);
@@ -552,7 +580,7 @@ window.addEventListener('pointerup', (e) => {
 });
 window.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase(); keys.add(k);
-  if (k === ' ') { e.preventDefault(); audio.resume(); if (state.phase === 'setup' || (state.phase === 'black' && endShown)) startSequence(); }
+  if (k === ' ') { e.preventDefault(); audio.resume(); if (state.phase === 'setup' || (state.phase === 'light' && endShown)) startSequence(); }
   if (k === 'escape' || k === 'b') abort();
   if (k === 'k') action('scan');
   if (k === 'm') action('top');
@@ -607,4 +635,4 @@ renderer.setAnimationLoop((time, xrFrame) => {
   frame(dt, xrFrame);
   renderer.render(scene, camera);
 });
-window.__reaper = { state, rp, reaper, user, look, startSequence, abort, action, frame, update, buildRoom, simulatedItems, camera, renderer, scene, THREE, get room() { return room; }, get nav() { return nav; }, get door() { return door; }, audio };
+window.__reaper = { afterlife, fireP, get modelState() { return modelState; }, state, rp, reaper, user, look, startSequence, abort, action, frame, update, buildRoom, simulatedItems, camera, renderer, scene, THREE, get room() { return room; }, get nav() { return nav; }, get door() { return door; }, audio };

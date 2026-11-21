@@ -67,6 +67,46 @@ function slashBuf(ctx) {
   });
 }
 
+// ogień: szum z niskim rykiem + trzaski (pętla)
+function fireBuf(ctx) {
+  const L = 4, sr = ctx.sampleRate;
+  const cr = Array.from({ length: 70 }, () => [Math.random() * L, 0.2 + Math.random() * 0.8, 2000 + Math.random() * 4000]);
+  return buffer(ctx, L, (t, s) => {
+    s.lp = (s.lp || 0) + 0.05 * ((Math.random() * 2 - 1) - (s.lp || 0));
+    s.lp2 = (s.lp2 || 0) + 0.01 * (s.lp - (s.lp2 || 0));
+    let c = 0;
+    for (const [t0, a, f] of cr) { const d = t - t0; if (d > 0 && d < 0.03) c += a * Math.sin(2 * Math.PI * f * d) * Math.exp(-d * 160) * (Math.random() * 0.6 + 0.7); }
+    const roar = s.lp * 1.6 + s.lp2 * 6 * (0.8 + 0.2 * Math.sin(2 * Math.PI * t / L * 3));
+    return roar * 0.6 + c * 0.9;
+  });
+}
+function igniteBuf(ctx) {
+  return buffer(ctx, 1.8, (t, s) => {
+    const k = Math.min(0.5, 0.01 + t * 0.9);
+    s.lp = (s.lp || 0) + k * ((Math.random() * 2 - 1) - (s.lp || 0));
+    const env = Math.min(1, t / 0.35) * Math.exp(-Math.max(0, t - 0.35) * 2.2);
+    const thump = Math.sin(2 * Math.PI * 45 * t) * Math.exp(-t * 5) * Math.min(1, t * 60);
+    return s.lp * env * 2 + thump * 0.8;
+  });
+}
+// eteryczny akord (pętla bez szwu) i dzwon blasku
+function padBuf(ctx) {
+  const L = 8, fr = [110, 164.81, 220, 277.18, 329.63, 440, 554.37, 659.25];
+  return buffer(ctx, L, (t) => {
+    let v = 0;
+    fr.forEach((f, k) => { const ff = Math.round(f * L) / L, df = Math.round((f * 1.004) * L) / L; v += (Math.sin(2 * Math.PI * ff * t) + Math.sin(2 * Math.PI * df * t)) * (0.6 + 0.4 * Math.sin(2 * Math.PI * (k % 3 + 1) * t / L)) / (k + 2); });
+    return v;
+  });
+}
+function chimeBuf(ctx) {
+  const fr = [880, 1318.5, 1760, 2217, 2637, 3520];
+  return buffer(ctx, 6, (t, s) => {
+    s.lp = (s.lp || 0) + 0.02 * ((Math.random() * 2 - 1) - (s.lp || 0));
+    let v = 0; fr.forEach((f, k) => { v += Math.sin(2 * Math.PI * f * t + k) * Math.exp(-t * (0.5 + k * 0.25)) / (k + 1); });
+    return v * Math.min(1, t * 30) + s.lp * 4 * Math.exp(-t * 0.8);
+  });
+}
+
 export class ReaperAudio {
   constructor(camera, scene) {
     this.listener = new THREE.AudioListener();
@@ -82,6 +122,11 @@ export class ReaperAudio {
     this.slash = new THREE.Audio(this.listener);
     this.drone = new THREE.Audio(this.listener);
     this.drone.setBuffer(droneBuf(ctx)); this.drone.setLoop(true); this.drone.setVolume(0);
+    this.fireSrc = pos(); this.fireSrc.setBuffer(fireBuf(ctx)); this.fireSrc.setLoop(true); this.fireSrc.setVolume(0); this.fireSrc.setRefDistance(1.5);
+    this.igniteB = igniteBuf(ctx); this.igniteSrc = pos();
+    this.pad = new THREE.Audio(this.listener); this.pad.setBuffer(padBuf(ctx)); this.pad.setLoop(true); this.pad.setVolume(0);
+    this.chimeB = chimeBuf(ctx); this.chime = new THREE.Audio(this.listener);
+    this.fireLevel = 0; this.padLevel = 0;
     this.heartT = 0; this.bpm = 0; this.droneLevel = 0;
     this.voiceB = null;
     fetch('./assets/reaper/juz_czas.mp3').then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status))).then((a) => ctx.decodeAudioData(a)).then((b) => { this.voiceB = b; }).catch(() => {});
@@ -110,8 +155,14 @@ export class ReaperAudio {
       return 'tts';
     } catch { return 'none'; }
   }
+  ignite(p) { this.at(this.igniteSrc, p, this.igniteB, 1.6); }
+  glare() { if (!this.ready) return; if (this.chime.isPlaying) this.chime.stop(); this.chime.setBuffer(this.chimeB); this.chime.setVolume(0.9); this.chime.play(); }
+  setFirePos(p) { this.fireSrc.position.copy(p); this.fireSrc.updateMatrixWorld(); }
   update(dt) {
     if (!this.ready) return;
+    const loop = (a, lv, k) => { if (lv > 0.001 && !a.isPlaying) a.play(); if (a.isPlaying) { a.setVolume(lv * k); if (lv <= 0.001) a.stop(); } };
+    loop(this.fireSrc, this.fireLevel, 1.3);
+    loop(this.pad, this.padLevel, 0.35);
     if (this.bpm > 0) {
       this.heartT -= dt;
       if (this.heartT <= 0) {
@@ -125,7 +176,8 @@ export class ReaperAudio {
   }
   silence() {
     this.bpm = 0; this.droneLevel = 0;
-    for (const a of [this.drone, this.heart, ...this.stepSrc, this.creakSrc, this.voiceSrc, this.whooshSrc]) if (a.isPlaying) a.stop();
+    this.fireLevel = 0; this.padLevel = 0;
+    for (const a of [this.drone, this.heart, ...this.stepSrc, this.creakSrc, this.voiceSrc, this.whooshSrc, this.fireSrc, this.igniteSrc, this.pad, this.chime]) if (a.isPlaying) a.stop();
     try { speechSynthesis.cancel(); } catch { /* brak */ }
   }
 }

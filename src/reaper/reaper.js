@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // Kostucha: czarna szata z kapturem, czaszka, kościste dłonie, kosa.
 // Oś przodu: +Z. Kosa obraca się wokół dłoni (pivot) — pozy: niesienie, zamach, cięcie.
@@ -13,8 +14,42 @@ const Y = new THREE.Vector3(0, 1, 0);
 
 export const POSES = {
   carry: { px: -0.3, py: 1.02, pz: 0.16, pitch: 0.1, yaw: -Math.PI / 2, lh: 0 },
-  windup: { px: -0.26, py: 1.6, pz: 0.18, pitch: Math.PI / 2 - 0.5, yaw: -2.3, lh: 1 },
+  windup: { px: -0.42, py: 1.78, pz: 0.08, pitch: Math.PI / 2 - 0.5, yaw: -2.3, lh: 1 },
 };
+export const SWING = { px: -0.1, pz: 0.4 };
+export const MODEL_SCALE = 1.15;       // model 1,7 m → ok. 1,95 m
+export function loadModel(url) { return new Promise((res, rej) => new GLTFLoader().load(url, res, undefined, rej)); }
+const GRIP2 = 0.3;                     // druga dłoń na drzewcu (m od pivotu)
+const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _d = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion();
+// obrót kości tak, by kierunek (kość → childWorld) wskazywał desiredWorld; k = ułamek obrotu
+function aimBone(bone, childWorld, desiredWorld, k = 1, maxAng = Math.PI) {
+  bone.getWorldPosition(_a);
+  const from = _b.subVectors(childWorld, _a).normalize(), to = _c.subVectors(desiredWorld, _a).normalize();
+  _q.setFromUnitVectors(from, to);
+  const ang = 2 * Math.acos(Math.min(1, Math.abs(_q.w)));
+  const f = Math.min(k, ang > 1e-5 ? maxAng / ang : 1);
+  if (f < 1) _q.slerp(_q3.identity(), 1 - f);
+  bone.getWorldQuaternion(_q2);
+  _q2.premultiply(_q);
+  bone.parent.getWorldQuaternion(_q3).invert();
+  bone.quaternion.copy(_q3.multiply(_q2));
+  bone.updateMatrixWorld(true);
+}
+// IK dwóch kości (ramię–przedramię) z biegunem łokcia
+function solveArm(upper, lower, hand, target, pole) {
+  const A = upper.getWorldPosition(new THREE.Vector3()), B = lower.getWorldPosition(new THREE.Vector3()), C = hand.getWorldPosition(new THREE.Vector3());
+  const l1 = A.distanceTo(B), l2 = B.distanceTo(C);
+  const d = new THREE.Vector3().subVectors(target, A);
+  const dist = THREE.MathUtils.clamp(d.length(), Math.abs(l1 - l2) + 1e-3, l1 + l2 - 1e-3);
+  d.normalize();
+  const x = (l1 * l1 - l2 * l2 + dist * dist) / (2 * dist), h = Math.sqrt(Math.max(0, l1 * l1 - x * x));
+  const pd = new THREE.Vector3().subVectors(pole, A); pd.addScaledVector(d, -pd.dot(d));
+  if (pd.lengthSq() < 1e-6) pd.set(0, -1, 0);
+  pd.normalize();
+  const elbow = A.clone().addScaledVector(d, x).addScaledVector(pd, h);
+  aimBone(upper, B, elbow);
+  aimBone(lower, hand.getWorldPosition(new THREE.Vector3()), A.clone().addScaledVector(d, dist));
+}
 export const lerpPose = (a, b, t) => { const o = {}; for (const k in a) o[k] = a[k] + (b[k] - a[k]) * t; return o; };
 
 function robeGeo() {
@@ -85,7 +120,7 @@ export class Reaper {
     this.pivot = new THREE.Group();
     this.root.add(this.pivot);
     const snath = new THREE.Mesh(new THREE.CylinderGeometry(0.019, 0.024, 1.95, 8).translate(0, 0.325, 0), WOOD);
-    const nib = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.15, 6).rotateZ(Math.PI / 2).translate(0.07, 0.45, 0), WOOD);
+    const nib = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.15, 6).rotateZ(Math.PI / 2).translate(0.07, 0.5, 0), WOOD);
     const s = new THREE.Shape();
     s.moveTo(0, 0.035);
     s.quadraticCurveTo(0.45, 0.17, 0.98, -0.07);
@@ -106,8 +141,78 @@ export class Reaper {
   scytheLocal(x, y, z, out) { return out.set(x, y, z).applyQuaternion(this.pivot.quaternion).add(this.pivot.position); }
   bladeTipWorld(out = new THREE.Vector3()) { this.scytheLocal(0.95, 1.2, 0, out); return this.root.localToWorld(out); }
 
-  update(dt, moving) {
+  // podmiana na model GLB (szkielet Mixamo + animacja biegu)
+  useModel(gltf) {
+    const m = gltf.scene;
+    m.scale.setScalar(MODEL_SCALE);
+    this.root.add(m);
+    this.model = m;
+    this.body.visible = false;
+    for (const o of [...this.sleeves, ...this.hands]) o.visible = false;
+    const B = {};
+    m.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = true; } if (o.isBone || o.name === 'headfront') B[o.name.replace('mixamorig', '')] = o; });
+    this.B = B;
+    m.updateMatrixWorld(true);
+    // świecące oczy (żar) w oczodołach
+    const glow = (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 64; const c = cv.getContext('2d'); const g = c.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,220,150,1)'); g.addColorStop(0.25, 'rgba(255,120,30,0.9)'); g.addColorStop(1, 'rgba(255,40,0,0)'); c.fillStyle = g; c.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(cv); })();
+    this.eyeSprites = [];
+    for (const sx of [-1, 1]) {
+      const w = m.localToWorld(new THREE.Vector3(sx * 0.036 + 0.002, 1.503, 0.15));
+      const e = new THREE.Group(); e.position.copy(B.Head.worldToLocal(w)); e.position.z += 0.02; B.Head.add(e);
+      // bez testu głębi (oczodoły są głęboko); chowane, gdy patrzysz na tył głowy
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true }));
+      sp.scale.setScalar(0.065); sp.renderOrder = 30;
+      e.add(sp); this.eyeSprites.push(sp);
+    }
+    this.mixer = new THREE.AnimationMixer(m);
+    this.run = this.mixer.clipAction(gltf.animations[0]);
+    this.run.play(); this.run.setEffectiveWeight(0);
+    this.ww = 0;
+  }
+  updateModel(dt, moving, speed) {
+    const B = this.B;
+    // chód = zwolniony bieg o zmniejszonym zasięgu (mieszany z pozą spoczynkową)
+    this.ww += ((moving ? 0.5 : 0) - this.ww) * Math.min(1, dt * 3);
+    this.run.setEffectiveWeight(this.ww);
+    this.run.timeScale = 0.27 * Math.max(0.4, speed / 0.5);
+    this.mixer.update(dt);
+    this.root.updateMatrixWorld(true);
+    // skręt tułowia (zamach)
+    if (Math.abs(this.twist) > 1e-3) {
+      const sp = B.Spine1; sp.getWorldQuaternion(_q2); _q.setFromAxisAngle(Y, this.twist); _q2.premultiply(_q);
+      sp.parent.getWorldQuaternion(_q3).invert(); sp.quaternion.copy(_q3.multiply(_q2)); sp.updateMatrixWorld(true);
+    }
+    // głowa patrzy na gracza
+    if (this.lookAt) aimBone(B.Head, B.headfront.getWorldPosition(new THREE.Vector3()), this.lookAt, 0.8, 0.9);
+    // ręce na kosie
+    const piv = this.root.localToWorld(this.pivot.position.clone());
+    const pr = this.root.localToWorld(new THREE.Vector3(-0.6, 0.9, -0.35)), pl = this.root.localToWorld(new THREE.Vector3(0.6, 0.9, -0.35));
+    solveArm(B.RightArm, B.RightForeArm, B.RightHand, piv, pr);
+    const lh = this.pose.lh;
+    if (lh > 0.01) {
+      const grip = this.root.localToWorld(this.scytheLocal(0, GRIP2, 0, new THREE.Vector3()));
+      const cur = B.LeftHand.getWorldPosition(new THREE.Vector3());
+      solveArm(B.LeftArm, B.LeftForeArm, B.LeftHand, cur.lerp(grip, lh), pl);
+    }
+    const fl = 0.85 + 0.15 * Math.sin(this.breath * 23) * Math.sin(this.breath * 7.3);
+    let front = true;
+    if (this.viewer) {
+      const hp = B.Head.getWorldPosition(new THREE.Vector3()), hf = B.headfront.getWorldPosition(new THREE.Vector3()).sub(hp).normalize();
+      front = hf.dot(this.viewer.clone().sub(hp).normalize()) > 0.25;
+    }
+    for (const s of this.eyeSprites) { s.scale.setScalar(0.065 * fl); s.visible = front; }
+  }
+
+  update(dt, moving, speed = 0.5) {
     this.breath += dt;
+    if (this.model) {
+      const p = this.pose;
+      this.pivot.position.set(p.px, p.py, p.pz);
+      this.pivot.rotation.set(p.pitch, p.yaw, 0, 'YXZ');
+      this.pivot.updateMatrix();
+      this.updateModel(dt, moving, speed);
+      return;
+    }
     const bob = moving ? Math.abs(Math.sin(this.walk)) * 0.035 : Math.sin(this.breath * 1.3) * 0.006;
     const sway = moving ? Math.sin(this.walk) * 0.035 : 0;
     this.body.position.y = bob;
@@ -134,7 +239,7 @@ export class Reaper {
     const sh = (x) => new THREE.Vector3(x * c, 1.5 + bob, -x * sn);
     const right = this.pivot.position.clone();
     const hang = new THREE.Vector3(0.27 * c + 0.06 * sn, 0.9 + bob, -0.27 * sn + 0.06 * c);
-    const grip = this.scytheLocal(0, 0.45, 0, new THREE.Vector3());
+    const grip = this.scytheLocal(0, GRIP2, 0, new THREE.Vector3());
     const left = hang.lerp(grip, p.lh);
     this.limb(0, sh(-0.24), right);
     this.limb(1, sh(0.24), left);
