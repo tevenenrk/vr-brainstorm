@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kostucha MR</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #07080a; overflow: hidden; font-family: system-ui, sans-serif; color: #e8dcd6; }
+    #app canvas { display: block; }
+    #panel { position: fixed; left: 16px; top: 16px; max-width: 390px; background: rgba(20, 10, 10, 0.86); border: 1px solid rgba(200, 70, 60, 0.45); border-radius: 14px; padding: 16px 18px; box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
+    #panel h1 { margin: 0 0 6px; font-size: 22px; color: #ff7a60; font-family: Georgia, serif; letter-spacing: 1px; }
+    #panel p { margin: 6px 0; font-size: 13px; line-height: 1.45; color: #d4c4be; }
+    .btns { display: flex; gap: 8px; margin: 12px 0 6px; flex-wrap: wrap; }
+    button, a.btn { font: 600 15px system-ui, sans-serif; padding: 10px 14px; border-radius: 10px; border: 0; background: #e06a50; color: #200806; cursor: pointer; text-decoration: none; }
+    button.alt, a.btn.alt { background: #cfe8ff; color: #102233; }
+    button:disabled { background: #3a3030; color: #8a7a78; cursor: not-allowed; }
+    #xr-note { color: #ffcf8a; min-height: 1em; }
+    kbd { background: #3a2a28; border-radius: 4px; padding: 1px 5px; font-size: 12px; }
+    #hud { position: fixed; right: 16px; top: 16px; }
+    #hud canvas { width: 340px; height: auto; display: block; cursor: pointer; }
+    body.in-xr #panel, body.in-xr #hud { display: none !important; }
+    @media (max-width: 800px) { #hud canvas { width: 220px; } #panel { max-width: calc(100% - 270px); } }
+  </style>
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three/build/three.module.min.js", "three/addons/": "./vendor/three/addons/" } }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="panel">
+    <h1>Kostucha</h1>
+    <p>Tryb Mixed Reality na zeskanowany pokój. Gogle odczytują skan (podłoga, ściany, meble, drzwi). Najpierw słychać kroki za drzwiami, potem drzwi się uchylają, a kostucha powoli idzie do Ciebie, omijając meble…</p>
+    <p>Na Quest: zrób wcześniej skan pokoju (Ustawienia → Przestrzeń fizyczna → Ustawienia przestrzeni) i zaznacz w nim drzwi. Przy wejściu zezwól stronie na dostęp do danych przestrzeni. Najlepiej w słuchawkach.</p>
+    <div class="btns">
+      <button id="btn-ar">Mixed Reality</button>
+      <button id="btn-vr" class="alt">VR (pokój zastępczy)</button>
+      <a class="btn alt" href="index.html">Artyleria</a>
+      <a class="btn alt" href="medieval.html">Bitwa średniowieczna</a>
+    </div>
+    <p id="xr-note"></p>
+    <p><b>Na komputerze</b> (pokój zastępczy): <kbd>Spacja</kbd> — start, <kbd>WASD</kbd> + przeciąganie myszą — ruch i rozglądanie, <kbd>M</kbd> — widok z góry, <kbd>K</kbd> — skan i ścieżka, <kbd>P</kbd> — wskaż drzwi, <kbd>Esc</kbd> — przerwij.</p>
+  </div>
+  <div id="hud"></div>
+  <script type="module" src="./src/reaper/main.js"></script>
+</body>
+</html>

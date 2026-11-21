@@ -1,6 +1,6 @@
 # Stół Artyleryjski VR + Makieta Katastrof (Meta Quest 3 / 3S)
 
-Siedem trybów na lewitującej platformie:
+Siedem trybów na lewitującej platformie i jeden w Twoim pokoju:
 - **Artyleria** (`index.html`): bronisz wioski przed piechotą i czołgami.
 - **Makieta katastrof** (`disasters.html`): kwadratowy miniaturowy świat, na którym wywołujesz katastrofy.
 - **Stół pinów** (`pins.html`): matryca wysuwanych pinów (shape display), z której rzeźbisz powierzchnie i która manipuluje przedmiotami.
@@ -8,6 +8,7 @@ Siedem trybów na lewitującej platformie:
 - **Bitwa** (`battle.html`): dwie armie walczą same, a Ty obserwujesz i dosyłasz posiłki.
 - **Bomba w skali** (`nuke.html`): makieta 40 × 40 km z miastem i wybuch jądrowy w prawdziwych proporcjach, ze zwolnionym tempem.
 - **Bitwa średniowieczna** (`medieval.html`): miecznicy, łucznicy, włócznicy i kawaleria; rozstawiasz i dowodzisz oddziałami albo wcielasz się w żołnierza.
+- **Kostucha** (`reaper.html`): horror w Mixed Reality na zeskanowanym pokoju. Z Twoich drzwi wychodzi kostucha i powoli idzie do Ciebie.
 
 Między trybami przełączasz się przyciskiem na stronie albo w menu w VR.
 
@@ -330,6 +331,51 @@ Na komputerze w roli żołnierza:
 - `F`, `G`, `T`: rozkazy;
 - `Q`: wyjście.
 
+## Tryb: Kostucha (Mixed Reality)
+
+Horror na Twój prawdziwy pokój. Strona prosi o dostęp do skanu przestrzeni (WebXR `plane-detection` i
+`mesh-detection`) i odczytuje z niego podłogę, ściany, meble i ramy drzwi.
+
+**Przebieg:**
+1. Pokój lekko ciemnieje i zaczyna buczeć niskie tło.
+2. Za drzwiami słychać ciężkie, zbliżające się kroki (dźwięk przestrzenny).
+3. Drzwi skrzypią i uchylają się. W szczelinie widać ciemny korytarz i świecące oczy, a po podłodze wypływa mgła.
+4. Kostucha wychodzi i powoli (0,5 m/s) idzie do Ciebie. Omija meble ze skanu (siatka nawigacyjna z marginesem
+   i A*), a gdy się ruszasz, przelicza trasę. Pokój ciemnieje, a bicie serca przyspiesza.
+5. Z odległości ok. 1,5 m unosi kosę i mówi **„Już czas”**.
+6. Tnie poziomo na wysokości szyi. W chwili cięcia obraz robi się **całkowicie czarny**.
+7. Po kilku sekundach pojawia się napis „Spust — jeszcze raz”.
+
+**Zasłanianie:** meble i ściany ze skanu są w scenie jako niewidoczne bryły. Kostucha chowa się za kanapą,
+a zza drzwi widać ją tylko przez uchyloną szczelinę.
+
+**Drzwi:**
+- Brane są ze skanu. Przy kilku drzwiach wybierane są najdalsze od Ciebie.
+- Jeśli skan nie ma drzwi, kostucha wychodzi ze środka najdalszej ściany.
+- Jeśli nie ma żadnego skanu, przed Tobą otwiera się portal.
+- Przycisk „Wskaż drzwi ręcznie” pozwala wskazać miejsce promieniem kontrolera.
+
+**Przygotowanie na Queście:**
+- Zrób skan pokoju: Ustawienia → Przestrzeń fizyczna → Ustawienia przestrzeni. Jeśli drzwi nie zostały wykryte,
+  dodaj je ręcznie. Przycisk „Zeskanuj pokój” w trybie też uruchamia skanowanie.
+- Przy wejściu w Mixed Reality zezwól na dostęp do danych przestrzeni.
+- Najlepiej w słuchawkach.
+
+Sterowanie: spust — przyciski panelu, **B** w trakcie sceny — przerwij. „Skan: pokaż” rysuje wykrytą
+podłogę, ściany, meble, drzwi i trasę kostuchy.
+
+Tryb VR i podgląd na komputerze używają pokoju zastępczego (4,2 × 5 m ze stołem, kanapą i regałem).
+Na komputerze:
+- `Spacja`: start;
+- `WASD` i przeciąganie myszą: ruch i rozglądanie;
+- `M`: widok z góry;
+- `K`: skan i ścieżka;
+- `P`: wskaż drzwi;
+- `Esc`: przerwij.
+
+Głos „Już czas” to plik `assets/reaper/juz_czas.mp3` (syntezator mowy obniżony i z pogłosem). Możesz go podmienić
+na własne nagranie o tej samej nazwie. Jeśli pliku brak, mówi syntezator przeglądarki.
+
 ## Plany na później
 
 - W trybie bitwy: samoloty i flak obu stron.
@@ -394,3 +440,4 @@ Potem otwórz na Queście `http://localhost:8000` (localhost traktowany jest jak
 - `src/battle/army.js`, `src/battle/main.js`: symulacja dwóch armii (piechota, czołgi, artyleria) i tryb obserwatora.
 - `src/nuke/world.js`, `src/nuke/blast.js`, `src/nuke/main.js`: makieta 40 × 40 km z miastem, model i wizualizacja wybuchu jądrowego.
 - `src/medieval/world.js`, `src/medieval/army.js`, `src/medieval/main.js`: pole bitwy, oddziały średniowieczne (szyki, walka wręcz, łucznictwo, morale), dowodzenie i wcielenie w żołnierza.
+- `src/reaper/room.js`, `src/reaper/reaper.js`, `src/reaper/audio.js`, `src/reaper/main.js`: tryb Kostucha. Odczyt skanu pokoju z WebXR, siatka nawigacyjna z A*, model i animacja kostuchy, dźwięki proceduralne, portal w drzwiach (stencil) i przebieg sceny.
