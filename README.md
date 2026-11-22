@@ -330,8 +330,9 @@ Przyciski:
 **Wcielenie w żołnierza:** przejmujesz jednego człowieka z zaznaczonego oddziału, a świat robi się 1:1.
 - **Ruch:** chodzisz lewą gałką (albo fizycznie po pokoju), a prawą gałką obracasz się skokowo.
 - **Jeździec:** jako kawalerzysta siedzisz wyżej i poruszasz się szybciej. Cios kopią w pędzie to szarża.
-- **Walka:** mieczem, włócznią i kopią bijesz spustem albo zamachem prawej ręki. Łuk napinasz, trzymając spust,
-  i strzelasz, puszczając go. Siła strzału zależy od tego, jak długo napinasz.
+- **Walka:** w VR mieczem, włócznią i kopią nie trzeba klikać. Liczy się fizyczne trafienie: ostrze musi przeciąć
+  sylwetkę wroga w zamachu, a szybszy zamach zadaje większe obrażenia. Na komputerze bijesz kliknięciem. Łuk napinasz,
+  trzymając spust, i strzelasz, puszczając go. Siła strzału zależy od tego, jak długo napinasz.
 - **Rozkazy:** wydajesz tylko swojemu oddziałowi, a pozostałe oddziały walczą same:
   - lewy spust na ziemię: „tam!”;
   - lewy spust na wroga: „atak!”;

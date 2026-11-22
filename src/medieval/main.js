@@ -414,6 +414,7 @@ function exitAvatar(reason) {
   if (!state.avatar) return;
   state.avatar = false;
   if (player) { player.isPlayer = false; player = null; }
+  bladePrev = null;
   for (const w of Object.values(weapons)) { w.visible = false; w.parent?.remove(w); }
   tableRoot.position.copy(saved.pos); tableRoot.quaternion.copy(saved.quat); tableRoot.scale.setScalar(saved.scale);
   if (!renderer.xr.isPresenting) { camera.position.copy(saved.cam); controls.target.copy(saved.target); controls.update(); }
@@ -468,6 +469,35 @@ function playerAttack(dirWorld, power = 1) {
   player.anim = 1;
   if (hits) { sound.play('clang', camera.getWorldPosition(new THREE.Vector3()), 0.8); for (const o of ctrls) if (o.hand === 'right') pulse(o, 0.8, 80); }
   void power;
+}
+// trafienie ostrzem: odcinek broni (w dłoni) przecina sylwetkę wroga z odpowiednią prędkością
+const BLADE = { sword: [-0.15, -0.95], spear: [-1.0, -2.3], cav: [-1.6, -3.25] };
+let bladePrev = null;
+function meleeContact(o, dt) {
+  const [z0, z1] = BLADE[player.type] || BLADE.sword;
+  _inv.copy(mapGroup.matrixWorld).invert();
+  const N = 6, now = [];
+  for (let k = 0; k < N; k++) now.push(o.grip.localToWorld(new THREE.Vector3(0, 0, z0 + ((z1 - z0) * k) / (N - 1))));
+  const prev = bladePrev; bladePrev = now.map((v) => v.clone());
+  if (!prev) return;
+  const tipSpeed = now[N - 1].distanceTo(prev[N - 1]) / Math.max(dt, 1e-3);
+  if (tipSpeed < 1.3) return;                       // samo dotknięcie bez zamachu nie rani
+  const pts = [];
+  for (let s = 0; s <= 2; s++) for (let k = 0; k < N; k++) pts.push(prev[k].clone().lerp(now[k], s / 2).applyMatrix4(_inv));
+  const r = 0.42 * UNIT_K, hit = new Set();
+  const cx = pts[0].x, cz = pts[0].z;
+  for (const s of army.soldiers) {
+    if (s.state !== 'alive' || s.side === player.side || s.isPlayer) continue;
+    if (Math.abs(s.x - cx) > 5 * UNIT_K || Math.abs(s.z - cz) > 5 * UNIT_K) continue;
+    if (s.playerHitT && clockT - s.playerHitT < 0.45) continue;
+    const base = field.heightAt(s.x, s.z), top = base + (TYPES[s.type].mount ? 2.6 : 1.8) * UNIT_K, rr = TYPES[s.type].mount ? r * 2.2 : r;
+    for (const q of pts) if (q.y > base && q.y < top && Math.hypot(q.x - s.x, q.z - s.z) < rr) { hit.add(s); break; }
+  }
+  if (!hit.size) return;
+  const power = Math.min(2, tipSpeed / 3);
+  for (const s of hit) { s.playerHitT = clockT; army.playerHit(player, s, power); }
+  player.anim = 1;
+  sound.play('clang', now[N - 1], 0.8);
 }
 function playerShoot(fromWorld, dirWorld, power) {
   if (!player) return;
@@ -556,8 +586,7 @@ const ctrls = [0, 1].map((i) => {
     if (state.avatar) {
       if (o.hand === 'left') { squadCommand('point', groundHit(o)); return; }
       if (player?.type === 'bow') { drawStart = clockT; return; }
-      playerAttack(new THREE.Vector3(0, 0, -1).applyQuaternion(o.c.getWorldQuaternion(new THREE.Quaternion())));
-      return;
+      return;      // broń biała w VR: liczy się fizyczne trafienie ostrzem (bez klikania)
     }
     pointerDown(groundHit(o));
   });
@@ -592,11 +621,12 @@ function pollXRInput(dt) {
     // prędkość dłoni — zamach mieczem/włócznią
     const wp = o.grip.getWorldPosition(new THREE.Vector3());
     o.speed = wp.distanceTo(o.lastPos) / Math.max(dt, 1e-3); const vdir = wp.clone().sub(o.lastPos); o.lastPos.copy(wp);
-    if (state.avatar && o.hand === 'right' && player && player.type !== 'bow' && o.speed > 2.6) playerAttack(vdir.normalize());
+    if (state.avatar && o.hand === 'right' && player && player.type !== 'bow') meleeContact(o, dt);
+    void vdir;
     if (o.hand === 'right') {
       if (down(5)) toggleMenu();
       if (state.avatar) {
-        if (Math.abs(ax) > 0.75 && !o.flick) { o.flick = true; snapTurn(ax > 0 ? -Math.PI / 6 : Math.PI / 6); }
+        if (Math.abs(ax) > 0.75 && !o.flick) { o.flick = true; snapTurn(ax > 0 ? Math.PI / 6 : -Math.PI / 6); }
         if (Math.abs(ax) < 0.35) o.flick = false;
       } else {
         if (down(4)) runToggle();
@@ -861,4 +891,4 @@ renderer.setAnimationLoop(() => {
   renderer.render(scene, camera);
 });
 preset();
-window.__med = { simStep, army, state, camera, controls, menuAction, enterAvatar, exitAvatar, THREE, field, get selected() { return primary(); }, set selected(v) { sel = new Set(v ? [v] : []); }, get sel() { return sel; }, set sel(v) { sel = v; }, groupFormation, issueGroup, pointerDown, pointerUp, aimFacing, updateAvatar, get player() { return player; } };
+window.__med = { simStep, army, state, camera, controls, menuAction, enterAvatar, exitAvatar, THREE, field, get selected() { return primary(); }, set selected(v) { sel = new Set(v ? [v] : []); }, get sel() { return sel; }, set sel(v) { sel = v; }, groupFormation, issueGroup, pointerDown, pointerUp, aimFacing, meleeContact, mapGroup, scene, updateAvatar, get player() { return player; } };

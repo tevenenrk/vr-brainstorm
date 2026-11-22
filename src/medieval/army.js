@@ -395,6 +395,15 @@ export class Army {
     return hits;
   }
 
+  // trafienie bronią gracza (fizyczny kontakt w VR); power ~ prędkość zamachu
+  playerHit(p, o, power = 1) {
+    const T = TYPES[p.type];
+    let dmg = T.dmg * (0.7 + 0.6 * power) * 1.25;
+    if (p.type === 'spear' && TYPES[o.type].mount) dmg *= ANTI_CAV;
+    if (T.charge && Math.hypot(p.vx, p.vz) > T.run * 0.45) dmg *= T.charge;
+    this.damage(o, dmg, p);
+  }
+
   update(dt, running) {
     this.buildGrid();
     if (running) {
