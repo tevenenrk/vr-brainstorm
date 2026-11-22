@@ -5,6 +5,7 @@ import { Room, NavGrid, itemsFromXR, simulatedItems } from './room.js';
 import { Reaper, POSES, SWING, lerpPose, loadModel } from './reaper.js';
 import { FirePortal, K_FULL } from './fire.js';
 import { Afterlife, T_LIGHT } from './afterlife.js';
+import { Judgement } from './judgement.js';
 import { ReaperAudio } from './audio.js';
 
 const params = new URLSearchParams(location.search);
@@ -75,6 +76,7 @@ reaper.root.visible = false;
 const audio = new ReaperAudio(camera, scene);
 const fireP = new FirePortal();
 const afterlife = new Afterlife(scene, camera);
+const judge = new Judgement(scene, camera);
 let modelState = 'ładowanie';
 loadModel('./assets/reaper/reaper.glb').then((g) => {
   reaper.useModel(g);
@@ -107,7 +109,7 @@ const tunnelMat = new THREE.ShaderMaterial({
   fragmentShader: `uniform float fire; varying vec3 vL;
     void main(){
       float d = clamp(-vL.z / 5.0, 0.0, 1.0);
-      float fl = smoothstep(0.3, 0.0, vL.y) * 0.6;
+      float fl = (1.0 - smoothstep(0.0, 0.3, vL.y)) * 0.6;
       vec3 c = vec3(0.05, 0.045, 0.05) * (1.0 + fl);
       c = mix(c, vec3(0.0), pow(d, 0.55));
       c += vec3(0.42, 0.08, 0.02) * exp(vL.z * 1.1) * fire;
@@ -231,7 +233,7 @@ function applyMode() {
 // ---------- sekwencja ----------
 function resetVisuals() {
   black.visible = false; endShown = false; cutDone = false; closeT = -1; glared = false;
-  afterlife.stop(); roomGroup.visible = doorGroup.visible = true;
+  afterlife.stop(); judge.stop(); rp.judgeMode = null; if (camera.far !== 60) { camera.far = 60; camera.updateProjectionMatrix(); } roomGroup.visible = doorGroup.visible = true;
   hemi.intensity = 0.9; key.intensity = 1.4; faceLight.intensity = 1.2;
   for (const f of fog) { f.life = 0; f.s.visible = false; }
   reaper.pose = { ...POSES.carry }; reaper.twist = 0; reaper.head.rotation.set(0, 0, 0);
@@ -323,9 +325,10 @@ function update(dt) {
   } else if (ph === 'ignite') {
     // drzwi zapłonęły: płonący prostokąt, wnętrze wypala się w portal
     targetDark = 0.35;
-    setPortal(K_FULL * ease(clamp01((state.t - 0.5) / 1.9)), clamp01(state.t / 0.7));
+    // najpierw płoną całe drzwi, potem ogień przepala je na wylot
+    setPortal(K_FULL * ease(clamp01((state.t - 1.6) / 2.0)), clamp01(state.t / 0.8));
     if (state.t > 1.2) spawnFog(dt, 3);
-    if (state.t > 4.0) setPhase('emerge');
+    if (state.t > 4.8) setPhase('emerge');
   } else if (ph === 'emerge') {
     targetDark = 0.4; moving = true; spawnFog(dt, 4);
     const t = door.c.clone().addScaledVector(door.n, 0.55);
@@ -379,7 +382,24 @@ function update(dt) {
     const r = afterlife.update(dt, user);
     audio.padLevel = 0.05 + 0.6 * r.light + 0.4 * r.approach;
     if (r.glare > 0 && !glared) { glared = true; audio.glare(); }
-    endShown = r.done;
+    if (r.done) {
+      // za blaskiem: miejsce sądu (brama do nieba z lewej, do piekła z prawej, waga przed graczem)
+      afterlife.stop();
+      judge.start(new THREE.Vector3(user.x, room.floorY, user.z), afterlife.yaw);
+      camera.far = 220; camera.updateProjectionMatrix();
+      setPhase('judge');
+    }
+  } else if (ph === 'judge') {
+    const r = judge.update(dt, user, pointScale());
+    endShown = r.canRestart;
+    if (r.mode === 'choose' || r.mode === 'flash') { audio.padLevel = 0.3; audio.droneLevel = 0.25; }
+    else if (r.mode === 'heaven') { audio.padLevel = 0.95; audio.droneLevel = 0; }
+    else if (r.mode === 'hell') { audio.padLevel = 0; audio.droneLevel = 1; }
+    if (r.mode !== rp.judgeMode) {
+      if (r.mode === 'heaven') audio.glare();
+      if (r.mode === 'hell') audio.ignite(user.clone());
+      rp.judgeMode = r.mode;
+    }
   }
   // portal gaśnie, gdy kostucha jest już w pokoju
   if (door && ['emerge', 'walk', 'raise', 'swing'].includes(ph)) {
@@ -389,6 +409,12 @@ function update(dt) {
   }
   if (door) audio.setFirePos(door.c.clone().setY(room.floorY + door.h * 0.5));
   audio.fireLevel = ph === 'black' || ph === 'light' ? 0 : fireK;
+  if (ph === 'judge') {
+    const hellSide = judge.mode === 'hell';
+    audio.fireLevel = hellSide ? 1 : judge.mode === 'heaven' ? 0 : 0.5;
+    audio.setFirePos(hellSide ? user.clone().setY(user.y - 1) : judge.root.localToWorld(new THREE.Vector3(4.4, 1.2, -6.6)));
+    hemi.intensity = 0; key.intensity = 0;
+  }
   // kostucha: pozycja, widoczność przez próg
   reaper.root.position.set(rp.pos.x, room ? room.floorY : 0, rp.pos.z);
   reaper.root.rotation.y = rp.yaw;
@@ -407,7 +433,7 @@ function update(dt) {
   audio.bpm = ph === 'walk' ? 64 + 80 * clamp01(1 - (dUser - STOP) / 3.5) * (dUser < 5 ? 1 : 0) : ph === 'raise' || ph === 'swing' ? 150 : ph === 'ignite' || ph === 'emerge' ? 72 : 0;
   audio.update(dt);
   state.flicker = Math.max(0, state.flicker - dt);
-  if (ph === 'setup' || ph === 'black' || ph === 'light') targetDark = 0;
+  if (ph === 'setup' || ph === 'black' || ph === 'light' || ph === 'judge') targetDark = 0;
   state.darkness += (targetDark - state.darkness) * Math.min(1, dt * 1.2);
   darkMat.opacity = Math.min(0.92, state.darkness + (state.flicker > 0 ? 0.3 : 0));
 }
@@ -504,7 +530,12 @@ function ctrlRay(o) {
 }
 function onTrigger(o) {
   audio.resume();
-  if (state.phase === 'black' || state.phase === 'light') { if (endShown) startSequence(); return; }
+  if (state.phase === 'judge') {
+    if (endShown) startSequence();
+    else if (judge.click(o.hand === 'left' ? -1 : 1)) { pulse(o, 0.6, 40); audio.clink(o.hand === 'left'); }
+    return;
+  }
+  if (state.phase === 'black' || state.phase === 'light') return;
   if (state.phase !== 'setup') return;
   const [p, d] = ctrlRay(o);
   raycaster.set(p, d);
@@ -563,7 +594,9 @@ const keys = new Set();
 let drag = null;
 renderer.domElement.addEventListener('pointerdown', (e) => {
   audio.resume(); drag = { x: e.clientX, y: e.clientY, moved: false };
+  if (state.phase === 'judge' && !endShown && (e.button === 0 || e.button === 2)) { if (judge.click(e.button === 0 ? -1 : 1)) audio.clink(e.button === 0); }
 });
+renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
 window.addEventListener('pointermove', (e) => {
   if (!drag) return;
   const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
@@ -580,8 +613,9 @@ window.addEventListener('pointerup', (e) => {
 });
 window.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase(); keys.add(k);
-  if (k === ' ') { e.preventDefault(); audio.resume(); if (state.phase === 'setup' || (state.phase === 'light' && endShown)) startSequence(); }
+  if (k === ' ') { e.preventDefault(); audio.resume(); if (state.phase === 'setup' || (state.phase === 'judge' && endShown)) startSequence(); }
   if (k === 'escape' || k === 'b') abort();
+  if (state.phase === 'judge' && !endShown && (k === 'arrowleft' || k === 'arrowright')) { if (judge.click(k === 'arrowleft' ? -1 : 1)) audio.clink(k === 'arrowleft'); }
   if (k === 'k') action('scan');
   if (k === 'm') action('top');
   if (k === 'p') action('pick');
@@ -635,4 +669,4 @@ renderer.setAnimationLoop((time, xrFrame) => {
   frame(dt, xrFrame);
   renderer.render(scene, camera);
 });
-window.__reaper = { afterlife, fireP, get modelState() { return modelState; }, state, rp, reaper, user, look, startSequence, abort, action, frame, update, buildRoom, simulatedItems, camera, renderer, scene, THREE, get room() { return room; }, get nav() { return nav; }, get door() { return door; }, audio };
+window.__reaper = { judge, afterlife, fireP, get modelState() { return modelState; }, state, rp, reaper, user, look, startSequence, abort, action, frame, update, buildRoom, simulatedItems, camera, renderer, scene, THREE, get room() { return room; }, get nav() { return nav; }, get door() { return door; }, audio };

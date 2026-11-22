@@ -107,6 +107,11 @@ function chimeBuf(ctx) {
   });
 }
 
+function clinkBuf(ctx) {
+  const fr = [2093, 3136, 4186, 5274];
+  return buffer(ctx, 0.9, (t) => { let v = 0; fr.forEach((f, k) => { v += Math.sin(2 * Math.PI * f * t + k) * Math.exp(-t * (4 + k * 3)) / (k + 1); }); return v * Math.min(1, t * 400); });
+}
+
 export class ReaperAudio {
   constructor(camera, scene) {
     this.listener = new THREE.AudioListener();
@@ -126,6 +131,7 @@ export class ReaperAudio {
     this.igniteB = igniteBuf(ctx); this.igniteSrc = pos();
     this.pad = new THREE.Audio(this.listener); this.pad.setBuffer(padBuf(ctx)); this.pad.setLoop(true); this.pad.setVolume(0);
     this.chimeB = chimeBuf(ctx); this.chime = new THREE.Audio(this.listener);
+    this.clinkB = clinkBuf(ctx); this.clink1 = new THREE.Audio(this.listener);
     this.fireLevel = 0; this.padLevel = 0;
     this.heartT = 0; this.bpm = 0; this.droneLevel = 0;
     this.voiceB = null;
@@ -156,6 +162,7 @@ export class ReaperAudio {
     } catch { return 'none'; }
   }
   ignite(p) { this.at(this.igniteSrc, p, this.igniteB, 1.6); }
+  clink(left) { if (!this.ready) return; const a = this.clink1; if (a.isPlaying) a.stop(); a.setBuffer(this.clinkB); a.setVolume(0.6); a.playbackRate = left ? 1.15 + Math.random() * 0.1 : 0.55 + Math.random() * 0.08; a.play(); }
   glare() { if (!this.ready) return; if (this.chime.isPlaying) this.chime.stop(); this.chime.setBuffer(this.chimeB); this.chime.setVolume(0.9); this.chime.play(); }
   setFirePos(p) { this.fireSrc.position.copy(p); this.fireSrc.updateMatrixWorld(); }
   update(dt) {

@@ -339,8 +339,9 @@ Horror na Twój prawdziwy pokój. Strona prosi o dostęp do skanu przestrzeni (W
 **Przebieg:**
 1. Pokój lekko ciemnieje i zaczyna buczeć niskie tło.
 2. Za drzwiami słychać ciężkie, zbliżające się kroki (dźwięk przestrzenny).
-3. Rama drzwi zapala się jak **płonący prostokąt** i środek wypala się w portal. Za nim jest ciemny,
-   rozżarzony korytarz, w którym stoi kostucha z żarzącymi się oczami.
+3. Zapalają się **całe drzwi**: płonie cała powierzchnia i rama. Po chwili ogień przepala je na wylot
+   w portal, a za nim jest ciemny, rozżarzony korytarz z kostuchą o żarzących się oczach. Kostucha
+   przechodzi przez ognistą zasłonę.
 4. Kostucha przechodzi przez ogień i powoli (0,5 m/s) idzie do Ciebie. Omija meble ze skanu (siatka nawigacyjna
    z marginesem i A*), a gdy się ruszasz, przelicza trasę. Gdy jest już w pokoju, portal gaśnie.
    Pokój ciemnieje, a bicie serca przyspiesza.
@@ -348,9 +349,16 @@ Horror na Twój prawdziwy pokój. Strona prosi o dostęp do skanu przestrzeni (W
 6. Tnie poziomo na wysokości szyi. W chwili cięcia obraz robi się **całkowicie czarny**.
 7. Po kilku sekundach w oddali pojawia się małe światło. Rośnie i oświetla otoczenie, a wtedy widać, że stoisz
    w ciemnym tunelu.
-8. Światło zbliża się najpierw powoli, potem coraz szybciej, aż wszystko zalewa biały blask i pojawia się
-   napis **„Carpe diem”**.
-9. Spust zaczyna scenę od nowa.
+8. Światło zbliża się najpierw powoli, potem coraz szybciej, aż wszystko zalewa biały blask.
+9. Za blaskiem jest **miejsce sądu**: lewa połowa to niebo z perłową bramą i złotymi kratami, prawa to piekło
+   z kamienną bramą najeżoną kolcami i wirem ognia. Pod stopami po lewej są chmury, po prawej lawa.
+10. Przed Tobą stoi **waga**. Każde kliknięcie lewego spustu dokłada jasną kulkę na lewą szalę, a prawego
+    rozżarzoną na prawą. Po ok. 11 kliknięciach przewagi waga się przechyla.
+11. Lewa szala w dół: biały błysk i stoisz w **chmurach**, nad morzem obłoków, w słońcu, wśród złotych drobinek.
+    Prawa szala w dół: ognisty błysk i stoisz na skale w **piekle**, wśród lawy, słupów ognia i iskier.
+12. Po kilku sekundach spust zaczyna scenę od nowa.
+
+Na komputerze w miejscu sądu: lewy lub prawy przycisk myszy (albo strzałki ← →) dokłada na szale.
 
 **Zasłanianie:** meble i ściany ze skanu są w scenie jako niewidoczne bryły. Kostucha chowa się za kanapą,
 a zza drzwi widać ją tylko przez uchyloną szczelinę.
@@ -455,5 +463,6 @@ Potem otwórz na Queście `http://localhost:8000` (localhost traktowany jest jak
   - Odczyt skanu pokoju z WebXR i siatka nawigacyjna z A*.
   - Model z IK rąk i kosą.
   - Płonący portal w drzwiach (stencil, cząsteczki ognia).
-  - Tunel ze światłem i „Carpe diem”.
+  - Tunel ze światłem.
+  - Miejsce sądu z wagą, niebo i piekło (`judgement.js`).
   - Dźwięki proceduralne i przebieg sceny.

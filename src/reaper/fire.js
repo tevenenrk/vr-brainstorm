@@ -34,8 +34,8 @@ export class FirePortal {
       fragmentShader: `uniform float k, fire, time; uniform vec2 size; varying vec2 vUv; ${NOISE} ${FIELD}
         void main(){
           float f = burnField(vUv, size, time);
-          float e = smoothstep(0.09, 0.0, abs(f - k)) * step(0.005, k) * (1.0 - smoothstep(${(K_FULL - 0.06).toFixed(2)}, ${K_FULL.toFixed(2)}, k));
-          float inner = step(f, k) * smoothstep(0.35, 0.0, k - f) * 0.35;
+          float e = (1.0 - smoothstep(0.0, 0.09, abs(f - k))) * step(0.005, k) * (1.0 - smoothstep(${(K_FULL - 0.06).toFixed(2)}, ${K_FULL.toFixed(2)}, k));
+          float inner = step(f, k) * (1.0 - smoothstep(0.0, 0.35, k - f)) * 0.35;
           float fl = 0.7 + 0.6 * fbm(vUv * size * 6.0 + vec2(0.0, -time * 3.0));
           vec3 c = mix(vec3(1.0, 0.25, 0.03), vec3(1.0, 0.85, 0.45), e) * (e * 1.6 + inner) * fl;
           gl_FragColor = vec4(c * min(1.0, fire + 0.2), 0.0);
@@ -57,6 +57,22 @@ export class FirePortal {
           gl_FragColor = vec4(c * fire, 0.0);
         }`,
     });
+    // płomienie na całej powierzchni drzwi (w wypalonym otworze zostaje cienka ognista zasłona)
+    this.sheetMat = new THREE.ShaderMaterial({
+      uniforms: this.uni, vertexShader: VS, ...ADD, side: THREE.DoubleSide,
+      fragmentShader: `uniform float k, fire, time; uniform vec2 size; varying vec2 vUv; ${NOISE} ${FIELD}
+        void main(){
+          vec2 p = vUv * size;
+          float n = fbm(vec2(p.x * 3.2, p.y * 2.2 - time * 2.6)) + 0.5 * fbm(vec2(p.x * 7.0 + 3.0, p.y * 5.0 - time * 4.5));
+          float base = 0.25 + 0.35 * (1.0 - vUv.y);
+          float flame = smoothstep(0.55, 1.15, n * 0.85 + base);
+          float hole = step(burnField(vUv, size, time), k);
+          float a = flame * mix(1.0, 0.28, hole);
+          vec3 c = mix(vec3(0.9, 0.12, 0.02), vec3(1.0, 0.62, 0.15), smoothstep(0.3, 0.8, flame));
+          c = mix(c, vec3(1.0, 0.9, 0.6), smoothstep(0.85, 1.0, flame));
+          gl_FragColor = vec4(c * a * fire * 1.25, 0.0);
+        }`,
+    });
     // cząsteczki ognia
     const N = this.N = 900;
     const g = new THREE.BufferGeometry();
@@ -69,7 +85,7 @@ export class FirePortal {
       uniforms: this.pointsUni, ...ADD,
       vertexShader: `attribute float size; attribute vec4 col; uniform float scale; varying vec4 vC;
         void main(){ vC = col; vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_PointSize = size * scale / max(0.05, -mv.z); gl_Position = projectionMatrix * mv; }`,
-      fragmentShader: `varying vec4 vC; void main(){ vec2 c = gl_PointCoord - 0.5; float a = smoothstep(0.5, 0.0, length(c)); a *= a; gl_FragColor = vec4(vC.rgb * vC.a * a, 0.0); }`,
+      fragmentShader: `varying vec4 vC; void main(){ vec2 c = gl_PointCoord - 0.5; float a = (1.0 - smoothstep(0.0, 0.5, length(c))); a *= a; gl_FragColor = vec4(vC.rgb * vC.a * a, 0.0); }`,
     }));
     this.points.frustumCulled = false;
     this.parts = Array.from({ length: N }, () => ({ life: 0, max: 1, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, s: 0, ember: false }));
@@ -85,13 +101,15 @@ export class FirePortal {
     this.mask = new THREE.Mesh(new THREE.PlaneGeometry(w, h).translate(0, h / 2, 0.015), this.maskMat);
     this.mask.renderOrder = -3;
     this.rim = new THREE.Mesh(new THREE.PlaneGeometry(w, h).translate(0, h / 2, 0.025), this.rimMat);
+    this.sheet = new THREE.Mesh(new THREE.PlaneGeometry(w, h).translate(0, h / 2, 0.028), this.sheetMat);
+    this.sheet.renderOrder = 19;
     this.rim.renderOrder = 20;
     const W = w + 0.6, H = h + 0.45;
     this.frame = new THREE.Mesh(new THREE.PlaneGeometry(W, H).translate(0, H / 2 - 0.03, 0.03), this.frameMat);
     this.frame.renderOrder = 21;
     this.points.renderOrder = 22;
     this.light.position.set(0, h * 0.55, 0.45);
-    this.group.add(this.mask, this.rim, this.frame, this.points, this.light);
+    this.group.add(this.mask, this.sheet, this.rim, this.frame, this.points, this.light);
     for (const p of this.parts) p.life = 0;
     this.set(0, 0);
   }
@@ -104,7 +122,8 @@ export class FirePortal {
       if (p.life > 0) continue;
       n--;
       let r = Math.random() * per, x, y;
-      if (r < h) { x = -w / 2; y = r; } else if (r < 2 * h) { x = w / 2; y = r - h; } else if (r < 2 * h + w) { x = -w / 2 + (r - 2 * h); y = h; } else { x = -w / 2 + (r - 2 * h - w); y = 0.01; }
+      if (Math.random() < 0.5) { x = (Math.random() - 0.5) * w; y = Math.random() * h * 0.95; }
+      else if (r < h) { x = -w / 2; y = r; } else if (r < 2 * h) { x = w / 2; y = r - h; } else if (r < 2 * h + w) { x = -w / 2 + (r - 2 * h); y = h; } else { x = -w / 2 + (r - 2 * h - w); y = 0.01; }
       p.ember = Math.random() < 0.08;
       p.x = x + (Math.random() - 0.5) * 0.05; p.y = y; p.z = 0.03 + Math.random() * 0.05;
       p.vx = (Math.random() - 0.5) * (p.ember ? 0.5 : 0.12); p.vy = p.ember ? 0.4 + Math.random() * 0.6 : 0.35 + Math.random() * 0.55; p.vz = Math.random() * (p.ember ? 0.4 : 0.1);
@@ -118,9 +137,9 @@ export class FirePortal {
     this.uni.time.value = this.time;
     this.pointsUni.scale.value = scale;
     const f = this.fire;
-    if (f > 0.01) { this.acc += dt * 520 * f; const n = Math.floor(this.acc); this.acc -= n; this.spawn(n); }
+    if (f > 0.01) { this.acc += dt * 760 * f; const n = Math.floor(this.acc); this.acc -= n; this.spawn(n); }
     const fl = 0.75 + 0.25 * Math.sin(this.time * 17) * Math.sin(this.time * 6.1 + 1.3);
-    this.light.intensity = 3.2 * f * fl;
+    this.light.intensity = 4.2 * f * fl;
     let i = 0;
     for (const p of this.parts) {
       if (p.life <= 0) continue;

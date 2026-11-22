@@ -1,8 +1,7 @@
 import * as THREE from 'three';
-import { CanvasPanel } from '../hud.js';
 
 // Po cięciu: ciemność → małe światło w oddali → okazuje się, że stoisz w tunelu →
-// światło zbliża się coraz szybciej → oślepiający blask → „Carpe diem”.
+// światło zbliża się coraz szybciej → oślepiający blask (za nim miejsce sądu).
 const NOISE = `
   float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -47,7 +46,7 @@ export class Afterlife {
           float light = Li * 7.0 / (1.0 + d * d * 0.06) + Li * 1.3 / (1.0 + d * 0.04);
           vec3 base = mix(vec3(0.30, 0.30, 0.36), vec3(0.62, 0.56, 0.50), rock) * (0.5 + 0.5 * ribs);
           vec3 c = base * light * vec3(1.0, 0.96, 0.88);
-          c += vec3(0.85, 0.9, 1.0) * Li * Li * 0.12 * smoothstep(30.0, 0.0, abs(vP.z - Lz));
+          c += vec3(0.85, 0.9, 1.0) * Li * Li * 0.12 * (1.0 - smoothstep(0.0, 30.0, abs(vP.z - Lz)));
           gl_FragColor = vec4(c, 1.0);
         }`,
     }));
@@ -61,11 +60,6 @@ export class Afterlife {
     this.white = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide, transparent: true, opacity: 0, depthTest: false, depthWrite: false }));
     this.white.renderOrder = 10010; this.white.frustumCulled = false; this.white.visible = false;
     camera.add(this.white);
-    this.text = new CanvasPanel(1024, 300, 1.2);
-    { const c = this.text.ctx; c.clearRect(0, 0, 1024, 300); c.textAlign = 'center'; c.fillStyle = '#4a3a1c'; c.font = 'italic 150px Georgia, "Times New Roman", serif'; c.fillText('Carpe diem', 512, 190); this.text.tex.needsUpdate = true; }
-    this.hint = new CanvasPanel(640, 110, 0.5);
-    { const c = this.hint.ctx; c.clearRect(0, 0, 640, 110); c.textAlign = 'center'; c.fillStyle = '#8a7a66'; c.font = '36px Georgia, serif'; c.fillText('Spust — jeszcze raz', 320, 66); this.hint.tex.needsUpdate = true; }
-    for (const [p, o] of [[this.text, 10011], [this.hint, 10012]]) { p.mesh.material.depthTest = false; p.mesh.material.opacity = 0; p.mesh.renderOrder = o; p.mesh.visible = false; scene.add(p.mesh); }
     this.active = false; this.t = 0; this.glareT = -1;
   }
 
@@ -80,7 +74,6 @@ export class Afterlife {
   stop() {
     this.active = false;
     this.group.visible = false; this.white.visible = false;
-    this.text.mesh.visible = this.hint.mesh.visible = false;
   }
   // zwraca { light 0..1, glare 0..1, done }
   update(dt, head) {
@@ -104,23 +97,8 @@ export class Afterlife {
       const g = t - this.glareT;
       glare = Math.min(1, g / 0.7);
       this.white.visible = true; this.white.material.opacity = glare;
-      if (g > 1.2) {
-        if (!this.text.mesh.visible) this.placeText();
-        this.text.mesh.material.opacity = Math.min(1, (g - 1.2) / 2.2);
-      }
-      if (g > 6) { this.hint.mesh.visible = true; this.hint.mesh.material.opacity = Math.min(1, (g - 6) / 1.5); this.done = true; }
+      if (g > 1.3) this.done = true;      // za blaskiem czeka miejsce sądu
     }
     return { light: Math.min(1, Li / 2), glare, done: !!this.done, approach: t > GROW ? Math.min(1, (t - GROW) / APPROACH) : 0 };
-  }
-  placeText() {
-    const cam = this.camera, p = cam.getWorldPosition(new THREE.Vector3());
-    const f = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.getWorldQuaternion(new THREE.Quaternion())); f.y = 0;
-    if (f.lengthSq() < 1e-4) f.set(0, 0, -1);
-    f.normalize();
-    this.text.mesh.position.copy(p).addScaledVector(f, 1.8); this.text.mesh.position.y += 0.05;
-    this.text.mesh.lookAt(p.x, this.text.mesh.position.y, p.z);
-    this.hint.mesh.position.copy(p).addScaledVector(f, 1.8); this.hint.mesh.position.y -= 0.42;
-    this.hint.mesh.lookAt(p.x, this.hint.mesh.position.y, p.z);
-    this.text.mesh.visible = true;
   }
 }
