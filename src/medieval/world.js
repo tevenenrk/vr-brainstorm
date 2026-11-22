@@ -45,7 +45,7 @@ export class Field {
     if (dr < 8) h = h * 0.7 + (h - 0.3) * 0.3;
     return h;
   }
-  forest(x, z) { return fbm(this.n2, x / 120 + 7, z / 120 - 3, 3) > 0.22 && Math.abs(z) < 240; }
+  forest(x, z) { return fbm(this.n2, x / 120 + 7, z / 120 - 3, 3) > 0.4 && Math.abs(z) < 240; }
 
   heightAt(x, z) {
     let fx = (x + MW / 2) / DX, fz = (z + MD / 2) / DX;
@@ -126,7 +126,7 @@ export class Field {
     for (let z = -MD / 2 + 4; z < MD / 2 - 4; z += 5) for (let x = -MW / 2 + 4; x < MW / 2 - 4; x += 5) {
       const px = x + (rng() - 0.5) * 4, pz = z + (rng() - 0.5) * 4;
       if (this.water(px, pz) || Math.abs(px - roadX(pz)) < 7) continue;
-      if (this.forest(px, pz) ? rng() < 0.55 : rng() < 0.004) list.push([px, this.heightAt(px, pz), pz, 0.8 + rng() * 0.5]);
+      if (this.forest(px, pz) ? rng() < 0.2 : rng() < 0.0012) list.push([px, this.heightAt(px, pz), pz, 0.8 + rng() * 0.5]);
     }
     const mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ flatShading: true }), list.length);
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), c = new THREE.Color();

@@ -6,6 +6,7 @@ import { TableManipulator } from '../table.js';
 import { CanvasPanel } from '../hud.js';
 import { Field, MW, MD, MAP_SCALE, UNIT_K } from './world.js';
 import { Army, SIDES, TYPES, ARROW_V, RIDER_EYE } from './army.js';
+import { bakeKnight } from './knight.js';
 
 const params = new URLSearchParams(location.search);
 const SHADOWS = params.get('shadows') !== '0';
@@ -49,10 +50,10 @@ class MHud extends CanvasPanel {
       'Lewy spust na ziemię: „tam!” · na wroga: „atak!”',
       'X: „za mną!” · Y: „do ataku!” (najbliższy wróg)',
     ] : [
-      'Spust na sztandar: wybór · na ziemię: marsz (przeciągnij = front)',
-      'Spust na wroga: atak · A: start/pauza · B: menu',
-      'Przed startem oddziały od razu stają we wskazanym miejscu',
-      'Lewy Y: wciel się w żołnierza zaznaczonego oddziału',
+      'Spust na oddział: dodaj/usuń · po pustej ziemi: zaznacz obszar',
+      'Spust na ziemię: marsz w szyku — skręt kontrolera obraca linię',
+      'Spust na wroga: atak · klik prawej gałki: odznacz · A: start',
+      'B: menu · lewy Y: wciel się w żołnierza zaznaczonego oddziału',
     ]).forEach((l, i) => c.fillText(l, 30, 326 + i * 30));
     this.tex.needsUpdate = true;
   }
@@ -143,6 +144,9 @@ const sound = new Sound(camera, scene);
   sound.buffers.clang = buf;
 }
 const army = new Army(field, mapGroup, effects);
+// model rycerza dla piechoty (dwa poziomy szczegółów: makieta i widok 1:1)
+Promise.all([bakeKnight('./assets/medieval/knight_hi.glb', UNIT_K), bakeKnight('./assets/medieval/knight_lo.glb', UNIT_K)])
+  .then(([hi, lo]) => army.useKnight(hi, lo)).catch((e) => console.warn('Model rycerza niedostępny', e));
 const table = new TableManipulator(tableRoot);
 const hud = new MHud(), menu = new MMenu();
 document.getElementById('hud').appendChild(hud.canvas);
@@ -159,14 +163,24 @@ targetFlag.add(new THREE.Mesh(new THREE.ConeGeometry(1.2 * UNIT_K, 2 * UNIT_K, 4
 const orderLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.8 }));
 const dragLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffffff }));
 for (const o of [selRing, targetFlag, orderLine, dragLine]) { o.visible = false; o.frustumCulled = false; mapGroup.add(o); }
+// zaznaczenie wielu oddziałów: pierścienie i linie rozkazów, zarys szyku w punkcie docelowym
+const ringPool = Array.from({ length: 24 }, () => { const r = new THREE.Mesh(selRing.geometry, selRing.material); r.visible = false; r.frustumCulled = false; mapGroup.add(r); return r; });
+const linePool = Array.from({ length: 24 }, () => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.8 })); l.visible = false; l.frustumCulled = false; mapGroup.add(l); return l; });
+const ghost = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.75 * UNIT_K, 0.75 * UNIT_K, 0.4 * UNIT_K, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, depthWrite: false, toneMapped: false }), 2000);
+ghost.instanceMatrix.setUsage(THREE.DynamicDrawUsage); ghost.setColorAt(0, new THREE.Color()); ghost.count = 0; ghost.frustumCulled = false; mapGroup.add(ghost);
+const ghostArrow = new THREE.Mesh(new THREE.ConeGeometry(2.2 * UNIT_K, 6 * UNIT_K, 4).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false }));
+ghostArrow.visible = false; mapGroup.add(ghostArrow);
+const boxLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(Array(5).fill(0).map(() => new THREE.Vector3())), new THREE.LineBasicMaterial({ color: 0xffffff }));
+boxLine.visible = false; boxLine.frustumCulled = false; mapGroup.add(boxLine);
 
 // ---------- stan ----------
 const state = { started: false, paused: true, speed: 1, avatar: false };
-let selected = null, flash = { text: '', until: 0, color: '#9fe8b0' }, aim = null, menuHover = false, drag = null, player = null;
+let sel = new Set(), rotOff = 0, flash = { text: '', until: 0, color: '#9fe8b0' }, aim = null, menuHover = false, drag = null, player = null;
+const primary = () => { let p = null; for (const q of sel) if (army.alive(q).length) p = q; return p; };
 const msg = (t, c = '#9fe8b0') => { flash = { text: t, until: clockT + 2.5, color: c }; };
 
 function preset() {
-  army.clear(); state.started = false; state.paused = true; selected = null;
+  army.clear(); state.started = false; state.paused = true; sel.clear();
   for (const side of [0, 1]) for (const t of ['cav', 'spear', 'sword', 'sword', 'spear', 'bow', 'bow', 'sword', 'cav']) army.addSquad(side, t);
   msg('Armie rozstawione — możesz je przestawić, potem START');
 }
@@ -178,10 +192,10 @@ function runToggle() {
 function menuAction(act) {
   const [k, a, b] = act.split(':');
   switch (k) {
-    case 'add': { const sq = army.addSquad(Number(a), b); selected = sq; msg(`Dodano: ${TYPES[b].name} (${SIDES[a].name})`); break; }
+    case 'add': { const sq = army.addSquad(Number(a), b); sel = new Set([sq]); msg(`Dodano: ${TYPES[b].name} (${SIDES[a].name})`); break; }
     case 'run': runToggle(); toggleMenu(false); break;
     case 'preset': preset(); break;
-    case 'clear': army.clear(); state.started = false; state.paused = true; selected = null; break;
+    case 'clear': army.clear(); state.started = false; state.paused = true; sel.clear(); break;
     case 'avatar': if (state.avatar) exitAvatar(); else enterAvatar(); toggleMenu(false); break;
     case 'speed-': case 'speed+': state.speed = SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, SPEEDS.indexOf(state.speed) + (k === 'speed+' ? 1 : -1)))]; break;
     case 'place': placeTable(); break;
@@ -201,38 +215,101 @@ function teleport(sq, x, z, facing) {
   sq.ax = x; sq.az = z; if (facing !== undefined) sq.facing = facing;
   for (const s of sq.soldiers) { const p = army.slotPos(sq, s); s.x = p[0]; s.z = p[1]; s.yaw = sq.facing; }
 }
-// rozkaz dla zaznaczonego oddziału: marsz (z frontem) albo atak
-function issueOrder(sq, p, p2) {
+// kierunek frontu: VR — kierunek wskazania kontrolera, skręt nadgarstka obraca linię; komputer — kierunek kamery
+function aimFacing() {
+  const q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
+  let F, roll = 0;
+  if (renderer.xr.isPresenting && aimCtrl?.source) {
+    aimCtrl.c.getWorldQuaternion(q);
+    F = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
+    const r = new THREE.Vector3(1, 0, 0).applyQuaternion(q), r0 = new THREE.Vector3().crossVectors(F, up);
+    if (r0.lengthSq() > 1e-4) roll = THREE.MathUtils.clamp(Math.atan2(-r.y, r.dot(r0.normalize())), -1.8, 1.8);
+  } else { camera.getWorldQuaternion(q); F = new THREE.Vector3(0, 0, -1).applyQuaternion(q); }
+  F.y = 0; if (F.lengthSq() < 1e-6) F.set(0, 0, -1); F.normalize();
+  F.applyAxisAngle(up, -roll + rotOff);
+  const d = F.transformDirection(mapGroup.matrixWorld.clone().invert());
+  return Math.atan2(d.x, d.z);
+}
+// szyk grupy: piechota w linii frontu, łucznicy za nią, jazda na skrzydłach (kolejność jak obecnie, bez krzyżowania)
+const ROLE = (t) => (t === 'bow' ? 'back' : t === 'cav' ? 'wing' : 'front');
+function groupFormation(list, p, facing) {
+  const c = Math.cos(facing), sn = Math.sin(facing), L = [c, -sn], Fv = [sn, c], GAP = 5;
+  const proj = (q) => { const [x, z] = army.center(q); return x * L[0] + z * L[1]; };
+  const T = (q) => TYPES[q.type], SPX = 1.7 * UNIT_K;
+  const width = (q) => (T(q).cols - 1) * (T(q).spx || SPX) + 3;
+  const depth = (q) => Math.ceil(Math.max(1, army.alive(q).length) / T(q).cols) * (T(q).spz || SPX);
+  const by = (r) => list.filter((q) => ROLE(q.type) === r).sort((a, b) => proj(a) - proj(b));
+  let front = by('front'), back = by('back');
+  const wings = by('wing');
+  if (!front.length) { front = back; back = []; }
+  const out = [];
+  const put = (q, lx, off) => out.push({ sq: q, x: p.x + L[0] * lx + Fv[0] * off, z: p.z + L[1] * lx + Fv[1] * off });
+  const lay = (arr, off) => {
+    const W = arr.reduce((a, q) => a + width(q), 0) + GAP * Math.max(0, arr.length - 1);
+    let x = -W / 2; for (const q of arr) { put(q, x + width(q) / 2, off); x += width(q) + GAP; }
+    return W;
+  };
+  const W = lay(front, 0);
+  if (back.length) lay(back, -(Math.max(...front.map(depth), 0) + 8));
+  let left = -W / 2 - GAP * 2, right = W / 2 + GAP * 2;
+  wings.forEach((q, i) => {
+    const w = width(q);
+    if (i % 2 === 0 && (wings.length > 1 || proj(q) <= 0)) { put(q, left - w / 2, 0); left -= w + GAP; }
+    else { put(q, right + w / 2, 0); right += w + GAP; }
+  });
+  return out;
+}
+function selList() { return [...sel].filter((q) => army.alive(q).length); }
+// rozkaz dla zaznaczonych oddziałów: atak na wskazanego wroga albo marsz w szyku
+function issueGroup(p, facing) {
+  const list = selList();
+  if (!list.length) return;
   const t = soldierAt(p, 5);
-  if (t && t.side !== sq.side) { army.order(sq, { type: 'attack', squad: t.sq }); msg(`${TYPES[sq.type].name}: do ataku!`, '#ff8a7a'); return; }
-  let facing;
-  if (p2 && Math.hypot(p2.x - p.x, p2.z - p.z) > 8) facing = Math.atan2(p2.x - p.x, p2.z - p.z);
-  if (!state.started) {
-    const ownHalf = sq.side === 0 ? p.z > 20 : p.z < -20;
-    if (!ownHalf) { msg('Przed bitwą rozstawiaj na swojej połowie', '#ffb070'); return; }
-    teleport(sq, p.x, p.z, facing ?? sq.facing);
-    army.order(sq, null);
-    msg('Oddział ustawiony');
+  if (t && state.started && list.every((q) => q.side !== t.side)) {
+    for (const q of list) army.order(q, { type: 'attack', squad: t.sq });
+    msg(list.length > 1 ? `${list.length} oddziały: do ataku!` : `${TYPES[list[0].type].name}: do ataku!`, '#ff8a7a');
     return;
   }
-  army.order(sq, { type: 'move', x: p.x, z: p.z, facing });
-  msg(`${TYPES[sq.type].name}: marsz!`);
+  const plan = groupFormation(list, p, facing);
+  if (!state.started) {
+    let ok = 0;
+    for (const a of plan) { const own = a.sq.side === 0 ? a.z > 20 : a.z < -20; if (!own) continue; teleport(a.sq, a.x, a.z, facing); army.order(a.sq, null); ok++; }
+    if (ok === plan.length) msg(plan.length > 1 ? `Ustawiono ${ok} oddziały` : 'Oddział ustawiony');
+    else msg('Przed bitwą rozstawiaj na swojej połowie', '#ffb070');
+    return;
+  }
+  for (const a of plan) army.order(a.sq, { type: 'move', x: a.x, z: a.z, facing });
+  msg(list.length > 1 ? `${list.length} oddziały: marsz w szyku!` : `${TYPES[list[0].type].name}: marsz!`);
 }
+// spust: oddział → dodaj/usuń z zaznaczenia; ziemia → marsz (z zaznaczeniem) albo zaznaczanie obszaru
 function pointerDown(p) {
   if (!p) return;
-  const s = soldierAt(p, 6);
+  const s = soldierAt(p, 6), list = selList(), side = list.length ? list[0].side : null;
   if (s) {
-    // w trakcie bitwy: wróg wybranego oddziału = cel ataku
-    if (selected && s.sq.side !== selected.side && state.started) { drag = { start: p.clone() }; return; }
-    // przed bitwą można przestawiać obie armie, w trakcie — tylko swoją
-    if (!state.started || s.sq.side === 0) { selected = s.sq === selected ? null : s.sq; return; }
+    if (list.length && s.sq.side !== side && state.started) { drag = { mode: 'place', start: p.clone() }; return; }
+    if (!state.started || s.sq.side === 0) {
+      if (sel.has(s.sq)) sel.delete(s.sq);
+      else { if (side !== null && side !== s.sq.side) sel.clear(); sel.add(s.sq); }
+      return;
+    }
   }
-  if (selected) drag = { start: p.clone() };
+  drag = { mode: list.length ? 'place' : 'box', start: p.clone() };
+}
+function boxSelect(a, b) {
+  const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x), z0 = Math.min(a.z, b.z), z1 = Math.max(a.z, b.z);
+  const inside = army.squads.filter((q) => { if (!army.alive(q).length) return false; const [x, z] = army.center(q); return x >= x0 && x <= x1 && z >= z0 && z <= z1; });
+  const side = inside.some((q) => q.side === 0) || state.started ? 0 : 1;
+  const pick = inside.filter((q) => q.side === side);
+  sel = new Set(pick);
+  if (pick.length) msg(`Zaznaczono: ${pick.length} oddz.`);
 }
 function pointerUp(p) {
-  if (!drag || !selected) { drag = null; return; }
-  issueOrder(selected, drag.start, p);
-  drag = null;
+  const d = drag; drag = null;
+  if (!d) return;
+  if (d.mode === 'box') { if (p) boxSelect(d.start, p); return; }
+  let facing = aimFacing();
+  if (!renderer.xr.isPresenting && p && Math.hypot(p.x - d.start.x, p.z - d.start.z) > 8) facing = Math.atan2(p.x - d.start.x, p.z - d.start.z);
+  issueGroup(d.start, facing);
 }
 
 // ---------- wcielenie w żołnierza ----------
@@ -256,7 +333,8 @@ const weapons = {};
 }
 function enterAvatar() {
   if (state.avatar) return;
-  let sq = selected && selected.side === 0 && army.alive(selected).length ? selected : army.squads.find((q) => q.side === 0 && army.alive(q).length);
+  const pr = primary();
+  let sq = pr && pr.side === 0 ? pr : army.squads.find((q) => q.side === 0 && army.alive(q).length);
   if (!sq) { msg('Brak oddziału do wcielenia', '#ff8a7a'); return; }
   const alive = army.alive(sq);
   player = alive.reduce((a, b) => (Math.abs(b.slot[0]) + Math.abs(b.slot[1]) < Math.abs(a.slot[0]) + Math.abs(a.slot[1]) ? b : a));
@@ -264,7 +342,7 @@ function enterAvatar() {
   playerHp = 100;
   for (const q of army.squads) if (q.side === 0 && q !== sq) { q.auto = true; if (q.order && !q.order.auto) q.order = null; }
   army.order(sq, { type: 'follow', soldier: player });
-  selected = sq;
+  sel = new Set([sq]);
   saved = { pos: tableRoot.position.clone(), quat: tableRoot.quaternion.clone(), scale: tableRoot.scale.x, cam: camera.position.clone(), target: controls.target.clone() };
   state.avatar = true;
   if (!state.started) runToggle(); else state.paused = false;
@@ -442,7 +520,11 @@ function pollXRInput(dt) {
       if (state.avatar) {
         if (Math.abs(ax) > 0.75 && !o.flick) { o.flick = true; snapTurn(ax > 0 ? -Math.PI / 6 : Math.PI / 6); }
         if (Math.abs(ax) < 0.35) o.flick = false;
-      } else if (down(4)) runToggle();
+      } else {
+        if (down(4)) runToggle();
+        if (down(3)) { sel.clear(); rotOff = 0; }
+        if (Math.abs(ax) > 0.25 && sel.size) rotOff -= ax * dt * 1.6;      // dokręcenie linii prawą gałką
+      }
     } else if (o.hand === 'left') {
       if (state.avatar) {
         if (Math.abs(ax) > 0.15 || Math.abs(ay) > 0.15) locomote(ax, -ay, dt);
@@ -500,7 +582,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   sound.resume();
   downAt = { x: e.clientX, y: e.clientY, b: e.button, shift: e.shiftKey };
   if (state.avatar) { if (e.button === 0) { if (player?.type === 'bow') drawStart = clockT; else playerAttack(new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion)); } return; }
-  if (e.button === 0 && e.shiftKey && selected) { controls.enabled = false; drag = { start: groundHit(null)?.clone() }; if (!drag.start) drag = null; }
+  if (e.button === 0 && e.shiftKey) { const p = groundHit(null); if (p && !soldierAt(p, 6)) { controls.enabled = false; drag = { mode: selList().length ? 'place' : 'box', start: p.clone() }; } }
 });
 renderer.domElement.addEventListener('pointerup', (e) => {
   if (state.avatar) {
@@ -519,6 +601,9 @@ window.addEventListener('keydown', (e) => {
   if (k === 'o' || k === 'b') toggleMenu();
   if (k === 'e' && !state.avatar) enterAvatar();
   if ((k === 'escape' || k === 'q') && state.avatar) exitAvatar();
+  if (k === 'escape' && !state.avatar) sel.clear();
+  if (k === 'z') rotOff += Math.PI / 12;
+  if (k === 'x') rotOff -= Math.PI / 12;
   if (k === '1') menuAction('add:0:sword'); if (k === '2') menuAction('add:0:bow'); if (k === '3') menuAction('add:0:spear');
   if (k === '7') menuAction('add:1:sword'); if (k === '8') menuAction('add:1:bow'); if (k === '9') menuAction('add:1:spear');
   if (state.avatar) {
@@ -590,24 +675,56 @@ function orderText(sq) {
   if (o.type === 'follow') return 'za mną';
   return '';
 }
+const GHOST_COL = { front: new THREE.Color(0xffe08a), back: new THREE.Color(0x9fe8a0), wing: new THREE.Color(0xffa860) };
+function selText() {
+  const l = selList();
+  if (!l.length) return null;
+  if (l.length === 1) return `${TYPES[l[0].type].name} (${SIDES[l[0].side].name}) · ${army.alive(l[0]).length} ludzi`;
+  return `${l.length} oddziały · ${l.reduce((a, q) => a + army.alive(q).length, 0)} ludzi`;
+}
 function updateMarkers() {
-  const sq = selected && army.alive(selected).length ? selected : null;
-  selRing.visible = !!sq && !state.avatar;
-  orderLine.visible = targetFlag.visible = false;
-  if (sq) {
-    const [cx, cz] = army.center(sq), r = Math.max(8, TYPES[sq.type].cols * 1.7 * UNIT_K * 0.7);
-    selRing.position.set(cx, field.heightAt(cx, cz) + 0.5, cz); selRing.scale.setScalar(r);
-    const o = sq.order;
+  const list = state.avatar ? [] : selList();
+  selRing.visible = orderLine.visible = targetFlag.visible = false;
+  ringPool.forEach((r, i) => {
+    const sq = list[i]; r.visible = !!sq;
+    if (!sq) { linePool[i].visible = false; return; }
+    const [cx, cz] = army.center(sq), rad = Math.max(8, TYPES[sq.type].cols * 1.7 * UNIT_K * 0.7);
+    r.position.set(cx, field.heightAt(cx, cz) + 0.5, cz); r.scale.setScalar(rad);
+    const o = sq.order, l = linePool[i];
     let tx = null, tz = null;
-    if (o?.type === 'move') { tx = o.x; tz = o.z; } else if (o?.type === 'attack') [tx, tz] = army.center(o.squad);
-    if (tx !== null) {
-      targetFlag.visible = o.type === 'move'; targetFlag.position.set(tx, field.heightAt(tx, tz), tz);
-      orderLine.visible = true;
-      orderLine.geometry.setFromPoints([new THREE.Vector3(cx, field.heightAt(cx, cz) + 2, cz), new THREE.Vector3(tx, field.heightAt(tx, tz) + 2, tz)]);
-      orderLine.material.color.setHex(o.type === 'attack' ? 0xff6a5a : 0xffe08a);
+    if (o?.type === 'move' && !o.reached) { tx = o.x; tz = o.z; } else if (o?.type === 'attack') [tx, tz] = army.center(o.squad);
+    l.visible = tx !== null;
+    if (l.visible) { l.geometry.setFromPoints([new THREE.Vector3(cx, field.heightAt(cx, cz) + 2, cz), new THREE.Vector3(tx, field.heightAt(tx, tz) + 2, tz)]); l.material.color.setHex(o.type === 'attack' ? 0xff6a5a : 0xffe08a); }
+  });
+  // zarys szyku w punkcie docelowym (kursor albo przytrzymany spust)
+  ghost.count = 0; ghostArrow.visible = false;
+  const xr = renderer.xr.isPresenting;
+  const cur = state.avatar ? null : xr ? (aimCtrl?.source && !menuHover ? groundHit(aimCtrl) : null) : groundHit(null);
+  const at = drag?.mode === 'place' ? drag.start : cur;
+  if (list.length && at && (!drag || drag.mode === 'place')) {
+    const enemy = soldierAt(at, 5);
+    if (!(enemy && state.started && list.every((q) => q.side !== enemy.side))) {
+      let facing = aimFacing();
+      if (!xr && drag && cur && Math.hypot(cur.x - drag.start.x, cur.z - drag.start.z) > 8) facing = Math.atan2(cur.x - drag.start.x, cur.z - drag.start.z);
+      const m = new THREE.Matrix4(), v = new THREE.Vector3();
+      let n = 0;
+      for (const a of groupFormation(list, at, facing)) {
+        const tmp = { ax: a.x, az: a.z, facing }, col = GHOST_COL[ROLE(a.sq.type)];
+        for (const s of army.alive(a.sq)) { if (n >= 2000) break; const [x, z] = army.slotPos(tmp, s); m.makeTranslation(v.set(x, field.heightAt(x, z) + 0.35 * UNIT_K, z)); ghost.setMatrixAt(n, m); ghost.setColorAt(n, col); n++; }
+      }
+      ghost.count = n; ghost.instanceMatrix.needsUpdate = true; ghost.instanceColor.needsUpdate = true;
+      const ax = at.x + Math.sin(facing) * 14, az = at.z + Math.cos(facing) * 14;
+      ghostArrow.visible = true; ghostArrow.position.set(ax, field.heightAt(ax, az) + 3 * UNIT_K, az); ghostArrow.rotation.set(0, facing, 0);
     }
   }
-  dragLine.visible = !!drag && !!drag.start;
+  // prostokąt zaznaczania
+  boxLine.visible = drag?.mode === 'box' && !!cur;
+  if (boxLine.visible) {
+    const a = drag.start, y = Math.max(field.heightAt(a.x, a.z), field.heightAt(cur.x, cur.z)) + 1.5, pts = boxLine.geometry.attributes.position;
+    [[a.x, a.z], [cur.x, a.z], [cur.x, cur.z], [a.x, cur.z], [a.x, a.z]].forEach(([x, z], k) => pts.setXYZ(k, x, y, z));
+    pts.needsUpdate = true;
+  }
+  dragLine.visible = false;
 }
 renderer.setAnimationLoop(() => {
   const dt = Math.min(0.05, clock.getDelta());
@@ -623,9 +740,9 @@ renderer.setAnimationLoop(() => {
   for (let i = 0; i < n; i++) simStep(sdt / n);
   updateAvatar(dt);
   scene.updateMatrixWorld();
-  army.render(state.avatar ? null : selected, state.avatar);
+  army.lod = state.avatar || tableRoot.scale.x > 12 || (!xr && camera.position.distanceTo(controls.target) < 0.12) ? 'hi' : 'lo';
+  army.render(state.avatar ? null : sel, state.avatar);
   updateMarkers();
-  if (drag?.start) { const p = xr ? groundHit(aimCtrl) : groundHit(null); if (p) dragLine.geometry.setFromPoints([drag.start.clone().setY(drag.start.y + 2), p.clone().setY(p.y + 2)]); }
   // łuk: naciąganie widać po strzale cofanej do twarzy
   if (state.avatar && player?.type === 'bow' && weapons.arrow.visible) weapons.arrow.position.z = drawStart !== null ? Math.min(0.5, (clockT - drawStart) * 0.6) : 0;
   for (const o of ctrls) if (o.source) o.ray.scale.z = menuHit && o === aimCtrl ? menuHit.distance : state.avatar ? 0.5 : 2;
@@ -639,7 +756,7 @@ renderer.setAnimationLoop(() => {
   hud.draw({
     avatar: state.avatar, status, blue, red,
     blueSq: army.squads.filter((q) => q.side === 0 && army.alive(q).length).length, redSq: army.squads.filter((q) => q.side === 1 && army.alive(q).length).length,
-    sel: selected ? `${TYPES[selected.type].name} (${SIDES[selected.side].name}) · ${army.alive(selected).length} ludzi` : null, order: orderText(state.avatar ? psq : selected),
+    sel: selText(), order: orderText(state.avatar ? psq : primary()),
     type: player ? TYPES[player.type].name : '', hp: playerHp, squad: psq ? `${army.alive(psq).length} ludzi` : '',
     msg: m, msgColor: flash.until > clockT ? flash.color : '#ffe08a',
   });
@@ -648,4 +765,4 @@ renderer.setAnimationLoop(() => {
   renderer.render(scene, camera);
 });
 preset();
-window.__med = { simStep, army, state, camera, controls, menuAction, enterAvatar, exitAvatar, THREE, field, get selected() { return selected; }, set selected(v) { selected = v; }, issueOrder, updateAvatar, get player() { return player; } };
+window.__med = { simStep, army, state, camera, controls, menuAction, enterAvatar, exitAvatar, THREE, field, get selected() { return primary(); }, set selected(v) { sel = new Set(v ? [v] : []); }, get sel() { return sel; }, set sel(v) { sel = v; }, groupFormation, issueGroup, pointerDown, pointerUp, aimFacing, updateAvatar, get player() { return player; } };

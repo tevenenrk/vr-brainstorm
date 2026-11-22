@@ -299,9 +299,22 @@ Oddział, który straci 2/3 ludzi przy wrogu, **ucieka** i po kilkunastu sekunda
 bez rozkazu albo po dojściu na miejsce sam kontratakuje wroga, który podejdzie.
 
 **Dowodzenie (widok makiety):**
-- spust na żołnierza albo sztandar: wybór oddziału;
-- spust na ziemię: marsz w to miejsce (przeciągnięcie ustawia front szyku);
-- spust na wroga: atak.
+- Spust na żołnierza albo sztandar dodaje oddział do zaznaczenia albo go z niego usuwa. Można zaznaczyć wiele oddziałów.
+- Spust przytrzymany na pustej ziemi (bez zaznaczenia) i przeciągnięty zaznacza prostokątem wszystkie oddziały w obszarze.
+- Klik prawej gałki odznacza wszystko.
+- Gdy kontroler celuje w teren, w miejscu docelowym widać **zarys szyku**, czyli kropki w miejscu każdego żołnierza:
+  - piechota (żółte) stoi w linii frontu, łucznicy (zielone) za nią, a jazda (pomarańczowa) na skrzydłach;
+  - kolejność oddziałów zostaje taka jak obecnie, więc się nie krzyżują;
+  - strzałka pokazuje, gdzie będzie front.
+- Front jest zgodny z kierunkiem kontrolera: wojsko patrzy tam, gdzie celujesz. Skręt nadgarstka obraca linię,
+  a prawa gałka ←→ ją dokręca. Przytrzymanie spustu blokuje miejsce, więc możesz spokojnie obrócić linię,
+  a puszczenie spustu wydaje rozkaz marszu.
+- Spust na wroga: wszystkie zaznaczone oddziały atakują.
+
+**Wygląd:** piechota (miecznicy, włócznicy, łucznicy) to model rycerza z animacją biegu, przyciemniony na kolor
+strony. Animacja jest „wypieczona” do 10 klatek i rysowana instancyjnie: setki żołnierzy kosztują kilkanaście
+wywołań rysowania. Model ma dwa poziomy szczegółów: ok. 700 trójkątów na makiecie i ok. 2400 z bliska oraz
+po wcieleniu. Broń i tarcza (w barwach strony) trzymają się dłoni.
 
 **Rozstawianie:** przed startem bitwy (pauza) oddział od razu staje we wskazanym miejscu na Twojej połowie.
 Przed startem możesz rozstawić także czerwonych. W trakcie bitwy czerwoni walczą sami.
@@ -458,6 +471,7 @@ Potem otwórz na Queście `http://localhost:8000` (localhost traktowany jest jak
 - `src/flak/ui.js`, `src/flak/main.js`: panel, menu, strefa wybuchów, podgląd obraz-w-obrazie, kabina pilota i pętla trybu.
 - `src/battle/army.js`, `src/battle/main.js`: symulacja dwóch armii (piechota, czołgi, artyleria) i tryb obserwatora.
 - `src/nuke/world.js`, `src/nuke/blast.js`, `src/nuke/main.js`: makieta 40 × 40 km z miastem, model i wizualizacja wybuchu jądrowego.
+- `src/medieval/knight.js`: wypiekanie animacji modelu rycerza (`assets/medieval/knight_*.glb`) do klatek.
 - `src/medieval/world.js`, `src/medieval/army.js`, `src/medieval/main.js`: pole bitwy, oddziały średniowieczne (szyki, walka wręcz, łucznictwo, morale), dowodzenie i wcielenie w żołnierza.
 - `src/reaper/room.js`, `src/reaper/reaper.js`, `src/reaper/fire.js`, `src/reaper/afterlife.js`, `src/reaper/audio.js`, `src/reaper/main.js`: tryb Kostucha.
   - Odczyt skanu pokoju z WebXR i siatka nawigacyjna z A*.

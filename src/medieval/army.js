@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MW, MD, UNIT_K } from './world.js';
+import { RUN_FRAMES, IDLE } from './knight.js';
 
 const G = 9.81;
 const K = UNIT_K;
@@ -84,6 +85,7 @@ export class Army {
     parent.add(this.arrowMesh);
     this.grid = new Map();
     this.onHit = null; this.onPlayerHit = null; this.onDeath = null;
+    this.knight = null; this.lod = 'lo';
     this.time = 0;
     this._m = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._q2 = new THREE.Quaternion(); this._p = new THREE.Vector3(); this._s = new THREE.Vector3(1, 1, 1); this._c = new THREE.Color(); this._up = new THREE.Vector3(0, 1, 0); this._x = new THREE.Vector3(1, 0, 0); this._v = new THREE.Vector3();
   }
@@ -404,17 +406,73 @@ export class Army {
     for (const sq of this.squads) sq.soldiers = sq.soldiers.filter((s) => !(s.state === 'dead' && s.t > 90));
   }
 
+  // piechota jako model rycerza: klatki animacji (dwa poziomy szczegółów) + tarcza
+  useKnight(hi, lo) {
+    const CAP = 1200, mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    const mk = (data) => data.frames.map((g) => {
+      const m = new THREE.InstancedMesh(g, mat, CAP);
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.setColorAt(0, new THREE.Color()); m.castShadow = true; m.frustumCulled = false; m.count = 0;
+      this.parent.add(m); return m;
+    });
+    const shield = new THREE.InstancedMesh(new THREE.BoxGeometry(0.07, 0.72, 0.56).scale(K, K, K), new THREE.MeshLambertMaterial({ color: 0xffffff }), CAP);
+    shield.instanceMatrix.setUsage(THREE.DynamicDrawUsage); shield.setColorAt(0, new THREE.Color()); shield.castShadow = true; shield.frustumCulled = false; shield.count = 0;
+    this.parent.add(shield);
+    this.knight = { sets: { hi: mk(hi), lo: mk(lo) }, hands: hi.hands, shield, buckets: new Array(RUN_FRAMES + 1).fill(0), ns: 0 };
+  }
+  drawKnight(s, sel, i) {
+    const F = this.field, kn = this.knight;
+    let y = F.heightAt(s.x, s.z);
+    this._q.setFromAxisAngle(this._up, s.yaw);
+    this._c.setRGB(1, 1, 1).lerp(SIDES[s.side].color, 0.8).multiplyScalar(2.0);
+    if (sel.has(s.sq)) this._c.lerp(new THREE.Color(1, 1, 0.55), 0.4);
+    let f = IDLE;
+    if (s.state === 'dead') {
+      this._v.set(s.fall.z, 0, -s.fall.x);
+      this._q2.setFromAxisAngle(this._v, Math.min(1, s.t / 0.4) * Math.PI / 2);
+      this._q.premultiply(this._q2);
+      y += 0.12 * K;
+      this._c.multiplyScalar(0.45);
+    } else if (Math.hypot(s.vx, s.vz) > 0.4 && !(s.anim > 0)) f = Math.floor((((s.phase / 8.4) % 1) + 1) % 1 * RUN_FRAMES) % RUN_FRAMES;
+    this._p.set(s.x, y, s.z);
+    this._m.compose(this._p, this._q, this._s);
+    const mesh = kn.sets[this.lod][f], bi = kn.buckets[f]++;
+    mesh.setMatrixAt(bi, this._m); mesh.setColorAt(bi, this._c);
+    const side = this._c.copy(SIDES[s.side].color);
+    // tarcza miecznika w lewej dłoni (w barwach strony)
+    const hand = kn.hands[f];
+    if (s.type === 'sword') {
+      const ns = kn.ns++;
+      if (s.state === 'dead') this._m.makeScale(0, 0, 0);
+      else this._m.compose(this._p.clone().add(hand.l.clone().add(new THREE.Vector3(0.07 * K, 0.02 * K, 0.1 * K)).applyQuaternion(this._q)), this._q, this._s);
+      kn.shield.setMatrixAt(ns, this._m); kn.shield.setColorAt(ns, side);
+    }
+    // broń w dłoni
+    const sw = s.anim > 0 ? Math.sin(s.anim * Math.PI) : 0, wq = new THREE.Quaternion();
+    let off;
+    if (s.type === 'sword') { wq.setFromAxisAngle(this._x, -0.9 + sw * 1.8); off = hand.r.clone(); }
+    else if (s.type === 'spear') { wq.setFromAxisAngle(this._x, 0.15); off = hand.r.clone().add(new THREE.Vector3(0, 0.05 * K, (-0.45 + sw * 0.6) * K)); }
+    else { wq.setFromAxisAngle(this._up, 0.15); off = hand.l.clone().add(new THREE.Vector3(0, 0.05 * K, 0.05 * K)); }
+    if (s.state === 'dead') this._m.makeScale(0, 0, 0);
+    else this._m.compose(this._p.clone().add(off.applyQuaternion(this._q)), this._q.clone().multiply(wq), this._s);
+    const M = this.meshes[s.type];
+    M.weap.setMatrixAt(i, this._m); M.weap.setColorAt(i, this._c.set(0xffffff));
+  }
+
   render(selected, hidePlayer) {
     const F = this.field, counts = {};
+    const sel = selected instanceof Set ? selected : new Set(selected ? [selected] : []);
     for (const t of Object.keys(TYPES)) counts[t] = 0;
+    const kn = this.knight;
+    if (kn) { kn.buckets.fill(0); kn.ns = 0; }
     for (const s of this.soldiers) {
       if (hidePlayer && s.isPlayer) continue;
       const M = this.meshes[s.type], i = counts[s.type]++;
       if (i >= 600) continue;
+      if (kn && s.type !== 'cav') { this.drawKnight(s, sel, i); continue; }
       let y = F.heightAt(s.x, s.z);
       this._q.setFromAxisAngle(this._up, s.yaw);
       this._c.copy(SIDES[s.side].color);
-      if (s.sq === selected) this._c.lerp(new THREE.Color(1, 1, 0.6), 0.35);
+      if (sel.has(s.sq)) this._c.lerp(new THREE.Color(1, 1, 0.6), 0.35);
       if (s.state === 'dead') {
         this._v.set(s.fall.z, 0, -s.fall.x);
         this._q2.setFromAxisAngle(this._v, Math.min(1, s.t / 0.4) * Math.PI / 2);
@@ -437,7 +495,11 @@ export class Army {
       else { const q = this._q.clone().multiply(wq); this._m.compose(this._p.clone().add(off.applyQuaternion(this._q)), q, this._s); }
       M.weap.setMatrixAt(i, this._m); M.weap.setColorAt(i, this._c.set(0xffffff));
     }
-    for (const t of Object.keys(TYPES)) { const M = this.meshes[t]; M.body.count = M.weap.count = Math.min(600, counts[t]); for (const m of [M.body, M.weap]) { m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; } }
+    for (const t of Object.keys(TYPES)) { const M = this.meshes[t]; M.body.count = M.weap.count = Math.min(600, counts[t]); if (kn && t !== 'cav') M.body.count = 0; for (const m of [M.body, M.weap]) { m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; } }
+    if (kn) {
+      for (const lod of ['hi', 'lo']) kn.sets[lod].forEach((m, f) => { m.visible = lod === this.lod; m.count = lod === this.lod ? kn.buckets[f] : 0; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; });
+      kn.shield.count = kn.ns; kn.shield.instanceMatrix.needsUpdate = true; kn.shield.instanceColor.needsUpdate = true;
+    }
     let n = 0;
     for (const a of this.arrows) {
       if (n >= 1500) break;
@@ -453,7 +515,7 @@ export class Army {
       const [cx, cz] = this.center(sq);
       sq.banner.position.set(cx, F.heightAt(cx, cz), cz);
       sq.banner.rotation.y = sq.facing + Math.PI / 2;
-      sq.banner.userData.flag.scale.setScalar(sq === selected ? 1.5 : 1);
+      sq.banner.userData.flag.scale.setScalar(sel.has(sq) ? 1.5 : 1);
     }
   }
 }
