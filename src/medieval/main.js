@@ -47,13 +47,13 @@ class MHud extends CanvasPanel {
     (s.avatar ? [
       'Lewa gałka: chód · prawa gałka ←→: obrót · B: menu',
       'Spust / zamach prawą ręką: cios (łuk: trzymaj i puść)',
-      'Lewy spust na ziemię: „tam!” · na wroga: „atak!”',
-      'X: „za mną!” · Y: „do ataku!” (najbliższy wróg)',
+      'Lewy spust na wroga: oddział atakuje biegiem · na ziemię: „tam!”',
+      'Oddział idzie za Tobą · X: „za mną!” · Y: „do ataku!”',
     ] : [
-      'Spust na oddział: dodaj/usuń · po pustej ziemi: zaznacz obszar',
-      'Spust na ziemię: marsz w szyku — skręt kontrolera obraca linię',
-      'Spust na wroga: atak · klik prawej gałki: odznacz · A: start',
-      'B: menu · lewy Y: wciel się w żołnierza zaznaczonego oddziału',
+      'Przeciągnij spustem po ziemi: zaznacz oddziały prostokątem',
+      'Spust na oddział: dodaj/usuń · na ziemię: marsz, 2× — biegiem',
+      'Skręt kontrolera obraca linię · na wroga: atak · gałka: odznacz',
+      'A: start · B: menu · lewy Y: wciel się w żołnierza',
     ]).forEach((l, i) => c.fillText(l, 30, 326 + i * 30));
     this.tex.needsUpdate = true;
   }
@@ -155,6 +155,36 @@ const toWorld = (p) => p.clone().applyMatrix4(mapGroup.matrixWorld);
 let lastSnd = 0, clockT = 0;
 army.onHit = (s) => { if (clockT - lastSnd < 0.06) return; lastSnd = clockT; sound.play('clang', toWorld(new THREE.Vector3(s.x, field.heightAt(s.x, s.z) + 2, s.z)), 0.4); };
 
+// tupot oddziałów w marszu: najbliższe maszerujące oddziały
+const marchSrc = Array.from({ length: 6 }, () => { const a = new THREE.PositionalAudio(sound.listener); a.setDistanceModel('inverse'); a.setRolloffFactor(1.2); scene.add(a); return a; });
+let marchI = 0;
+function updateMarch(dt) {
+  if (sound.listener.context.state !== 'running' || !state.started || state.paused) return;
+  const cam = camera.getWorldPosition(new THREE.Vector3()), cand = [];
+  for (const sq of army.squads) {
+    const al = army.alive(sq);
+    if (!al.length) continue;
+    let v = 0; const k = Math.min(6, al.length); for (let i = 0; i < k; i++) v += Math.hypot(al[i].vx, al[i].vz); v /= k;
+    if (v < 0.8 * UNIT_K) { sq.marchT = 0; continue; }
+    sq.marchT = (sq.marchT || 0) - dt * state.speed;
+    if (sq.marchT > 0) continue;
+    const [cx, cz] = army.center(sq), w = toWorld(new THREE.Vector3(cx, field.heightAt(cx, cz) + 1, cz));
+    cand.push({ sq, w, d: w.distanceTo(cam), n: al.length, run: v > 3 * UNIT_K });
+  }
+  cand.sort((a, b) => a.d - b.d);
+  for (const c of cand.slice(0, 3)) {
+    c.sq.marchT = c.run ? 0.34 : 0.55;
+    const a = marchSrc[marchI = (marchI + 1) % marchSrc.length];
+    if (a.isPlaying) a.stop();
+    a.setBuffer(sound.buffers.march); a.setRefDistance(state.avatar ? 5 : 0.35);
+    a.setVolume(Math.min(1, c.n / 18) * (c.sq.type === 'cav' ? 1.1 : 0.75)); a.playbackRate = (c.sq.type === 'cav' ? 0.7 : 1) * (0.92 + Math.random() * 0.16);
+    a.position.copy(c.w); a.updateMatrixWorld(); a.play();
+  }
+}
+// celownik trybu żołnierza: wskazany wrogi oddział
+const aimRing = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff5a4a, transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }));
+aimRing.visible = false; aimRing.frustumCulled = false;
+
 // znaczniki: pierścień zaznaczenia, cel marszu, linia rozkazu
 const selRing = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }));
 const targetFlag = new THREE.Group();
@@ -163,6 +193,7 @@ targetFlag.add(new THREE.Mesh(new THREE.ConeGeometry(1.2 * UNIT_K, 2 * UNIT_K, 4
 const orderLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.8 }));
 const dragLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffffff }));
 for (const o of [selRing, targetFlag, orderLine, dragLine]) { o.visible = false; o.frustumCulled = false; mapGroup.add(o); }
+mapGroup.add(aimRing);
 // zaznaczenie wielu oddziałów: pierścienie i linie rozkazów, zarys szyku w punkcie docelowym
 const ringPool = Array.from({ length: 24 }, () => { const r = new THREE.Mesh(selRing.geometry, selRing.material); r.visible = false; r.frustumCulled = false; mapGroup.add(r); return r; });
 const linePool = Array.from({ length: 24 }, () => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.8 })); l.visible = false; l.frustumCulled = false; mapGroup.add(l); return l; });
@@ -261,13 +292,13 @@ function groupFormation(list, p, facing) {
 }
 function selList() { return [...sel].filter((q) => army.alive(q).length); }
 // rozkaz dla zaznaczonych oddziałów: atak na wskazanego wroga albo marsz w szyku
-function issueGroup(p, facing) {
+function issueGroup(p, facing, run = false) {
   const list = selList();
   if (!list.length) return;
   const t = soldierAt(p, 5);
   if (t && state.started && list.every((q) => q.side !== t.side)) {
-    for (const q of list) army.order(q, { type: 'attack', squad: t.sq });
-    msg(list.length > 1 ? `${list.length} oddziały: do ataku!` : `${TYPES[list[0].type].name}: do ataku!`, '#ff8a7a');
+    for (const q of list) army.order(q, { type: 'attack', squad: t.sq, run });
+    msg((list.length > 1 ? `${list.length} oddziały: do ataku` : `${TYPES[list[0].type].name}: do ataku`) + (run ? ' biegiem!' : '!'), '#ff8a7a');
     return;
   }
   const plan = groupFormation(list, p, facing);
@@ -278,22 +309,32 @@ function issueGroup(p, facing) {
     else msg('Przed bitwą rozstawiaj na swojej połowie', '#ffb070');
     return;
   }
-  for (const a of plan) army.order(a.sq, { type: 'move', x: a.x, z: a.z, facing });
-  msg(list.length > 1 ? `${list.length} oddziały: marsz w szyku!` : `${TYPES[list[0].type].name}: marsz!`);
+  for (const a of plan) army.order(a.sq, { type: 'move', x: a.x, z: a.z, facing, run });
+  msg(run ? (list.length > 1 ? `${list.length} oddziały: biegiem!` : `${TYPES[list[0].type].name}: biegiem!`) : list.length > 1 ? `${list.length} oddziały: marsz w szyku!` : `${TYPES[list[0].type].name}: marsz!`, run ? '#ffd08a' : '#9fe8b0');
 }
-// spust: oddział → dodaj/usuń z zaznaczenia; ziemia → marsz (z zaznaczeniem) albo zaznaczanie obszaru
+// spust: przeciągnięcie = zaznaczenie prostokątem (zawsze); krótkie kliknięcie = oddział dodaj/usuń albo rozkaz;
+// dwuklik w ten sam cel = biegiem
+const BOX_MIN = 8;
+let lastClick = null;
 function pointerDown(p) {
   if (!p) return;
+  drag = { start: p.clone(), cur: p.clone() };
+}
+function clickAt(p) {
   const s = soldierAt(p, 6), list = selList(), side = list.length ? list[0].side : null;
-  if (s) {
-    if (list.length && s.sq.side !== side && state.started) { drag = { mode: 'place', start: p.clone() }; return; }
-    if (!state.started || s.sq.side === 0) {
-      if (sel.has(s.sq)) sel.delete(s.sq);
-      else { if (side !== null && side !== s.sq.side) sel.clear(); sel.add(s.sq); }
-      return;
-    }
+  const enemyTarget = s && list.length && s.sq.side !== side && state.started;
+  if (s && !enemyTarget && (!state.started || s.sq.side === 0)) {
+    if (sel.has(s.sq)) sel.delete(s.sq);
+    else { if (side !== null && side !== s.sq.side) sel.clear(); sel.add(s.sq); }
+    lastClick = null;
+    return;
   }
-  drag = { mode: list.length ? 'place' : 'box', start: p.clone() };
+  if (!list.length) return;
+  const prev = lastClick;
+  const dbl = !!prev && clockT - prev.t < 0.5 && Math.hypot(p.x - prev.p.x, p.z - prev.p.z) < 14;
+  const facing = dbl ? prev.f : aimFacing(), at = dbl ? prev.p : p;
+  issueGroup(at, facing, dbl);
+  lastClick = dbl ? null : { t: clockT, p: p.clone(), f: facing };
 }
 function boxSelect(a, b) {
   const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x), z0 = Math.min(a.z, b.z), z1 = Math.max(a.z, b.z);
@@ -301,15 +342,14 @@ function boxSelect(a, b) {
   const side = inside.some((q) => q.side === 0) || state.started ? 0 : 1;
   const pick = inside.filter((q) => q.side === side);
   sel = new Set(pick);
-  if (pick.length) msg(`Zaznaczono: ${pick.length} oddz.`);
+  msg(pick.length ? `Zaznaczono: ${pick.length} oddz.` : 'Nic nie zaznaczono', pick.length ? '#9fe8b0' : '#ffb070');
 }
 function pointerUp(p) {
   const d = drag; drag = null;
   if (!d) return;
-  if (d.mode === 'box') { if (p) boxSelect(d.start, p); return; }
-  let facing = aimFacing();
-  if (!renderer.xr.isPresenting && p && Math.hypot(p.x - d.start.x, p.z - d.start.z) > 8) facing = Math.atan2(p.x - d.start.x, p.z - d.start.z);
-  issueGroup(d.start, facing);
+  const end = p || d.cur;
+  if (Math.hypot(end.x - d.start.x, end.z - d.start.z) > BOX_MIN) { boxSelect(d.start, end); return; }
+  clickAt(d.start);
 }
 
 // ---------- wcielenie w żołnierza ----------
@@ -436,16 +476,54 @@ function playerShoot(fromWorld, dirWorld, power) {
   army.fire(from, d.multiplyScalar(ARROW_V * (0.45 + 0.55 * power)), player.side, player);
   sound.play('pop', fromWorld, 0.3);
 }
+// znacznik trafienia (X na środku widoku) i krótkie „tyk”
+const hitMark = new CanvasPanel(128, 128, 0.05);
+function drawHitMark(kill) {
+  const c = hitMark.ctx; c.clearRect(0, 0, 128, 128);
+  for (const [w, col] of [[11, 'rgba(0,0,0,0.6)'], [6, kill ? '#ff3a2a' : '#ffffff']]) {
+    c.strokeStyle = col; c.lineWidth = w; c.lineCap = 'round'; c.beginPath();
+    for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { c.moveTo(64 + sx * 18, 64 + sy * 18); c.lineTo(64 + sx * 48, 64 + sy * 48); }
+    c.stroke();
+  }
+  hitMark.tex.needsUpdate = true;
+}
+hitMark.mesh.material.depthTest = false; hitMark.mesh.renderOrder = 1000; hitMark.mesh.position.set(0, 0, -0.6); hitMark.mesh.visible = false;
+camera.add(hitMark.mesh);
+let hitT = 0, hitKill = false;
+{
+  const ctx = sound.listener.context, sr = ctx.sampleRate;
+  const mk = (dur, fn) => { const n = Math.floor(sr * dur), b = ctx.createBuffer(1, n, sr), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = fn(i / sr); return b; };
+  sound.buffers.hitmark = mk(0.09, (t) => (Math.sin(2 * Math.PI * 3100 * t) * 0.5 + Math.sin(2 * Math.PI * 4650 * t) * 0.3 + Math.sin(2 * Math.PI * 6900 * t) * 0.15) * Math.exp(-t * 70) + (t < 0.004 ? (Math.random() - 0.5) * 0.9 : 0));
+  sound.buffers.hitkill = mk(0.22, (t) => { const a = (u) => (u > 0 ? (Math.sin(2 * Math.PI * 2600 * u) * 0.5 + Math.sin(2 * Math.PI * 3900 * u) * 0.3) * Math.exp(-u * 45) : 0); return a(t) + a(t - 0.075) * 0.9; });
+  // tupot maszerującego oddziału: kilkanaście kroków + pobrzękiwanie zbroi
+  const steps = Array.from({ length: 12 }, () => [Math.random() * 0.32, 55 + Math.random() * 35, 0.5 + Math.random() * 0.5]);
+  const jingle = Array.from({ length: 10 }, () => [Math.random() * 0.4, 2800 + Math.random() * 3200]);
+  let lp = 0;
+  sound.buffers.march = mk(0.6, (t) => {
+    lp += 0.12 * ((Math.random() * 2 - 1) - lp);
+    let v = 0;
+    for (const [t0, f, a] of steps) { const u = t - t0; if (u > 0) v += (Math.sin(2 * Math.PI * f * u) * 0.8 + lp * 2.2) * a * Math.exp(-u * 28); }
+    for (const [t0, f] of jingle) { const u = t - t0; if (u > 0) v += Math.sin(2 * Math.PI * f * u) * 0.06 * Math.exp(-u * 40); }
+    return Math.tanh(v * 0.7);
+  });
+}
+const tick = new THREE.Audio(sound.listener);
+function playerHitFx(kill) {
+  hitT = kill ? 0.4 : 0.22; hitKill = kill; drawHitMark(kill);
+  if (sound.listener.context.state === 'running') { if (tick.isPlaying) tick.stop(); tick.setBuffer(sound.buffers[kill ? 'hitkill' : 'hitmark']); tick.setVolume(kill ? 0.9 : 0.75); tick.play(); }
+  for (const o of ctrls) if (o.source && (o.hand === 'right' || player?.type === 'bow')) pulse(o, kill ? 1 : 0.85, kill ? 140 : 60);
+}
+army.onPlayerDealt = (t, dmg, kill) => { if (state.avatar) playerHitFx(kill); };
 army.onPlayerHit = (dmg) => { hurt = Math.min(1, hurt + dmg / 40); for (const o of ctrls) pulse(o, 0.6, 120); };
 // rozkazy z poziomu żołnierza
 function squadCommand(kind, p) {
   if (!player) return;
   const sq = player.sq;
   if (kind === 'follow') { army.order(sq, { type: 'follow', soldier: player }); msg('„Za mną!”', '#ffe08a'); }
-  else if (kind === 'charge') { const t = army.nearestSquad(sq); if (t) { army.order(sq, { type: 'attack', squad: t }); msg('„Do ataku!”', '#ff8a7a'); } }
+  else if (kind === 'charge') { const t = army.nearestSquad(sq); if (t) { army.order(sq, { type: 'attack', squad: t, run: true }); msg('„Do ataku!”', '#ff8a7a'); } }
   else if (kind === 'point' && p) {
     const t = soldierAt(p, 8);
-    if (t && t.side !== sq.side) { army.order(sq, { type: 'attack', squad: t.sq }); msg('„Atakować tamtych!”', '#ff8a7a'); }
+    if (t && t.side !== sq.side) { army.order(sq, { type: 'attack', squad: t.sq, run: true, fromPlayer: true }); msg('„Na nich — biegiem!”', '#ff8a7a'); }
     else { army.order(sq, { type: 'move', x: p.x, z: p.z }); msg('„Naprzód — tam!”', '#ffe08a'); }
   }
 }
@@ -582,7 +660,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   sound.resume();
   downAt = { x: e.clientX, y: e.clientY, b: e.button, shift: e.shiftKey };
   if (state.avatar) { if (e.button === 0) { if (player?.type === 'bow') drawStart = clockT; else playerAttack(new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion)); } return; }
-  if (e.button === 0 && e.shiftKey) { const p = groundHit(null); if (p && !soldierAt(p, 6)) { controls.enabled = false; drag = { mode: selList().length ? 'place' : 'box', start: p.clone() }; } }
+  if (e.button === 0 && e.shiftKey) { const p = groundHit(null); if (p) { controls.enabled = false; pointerDown(p); } }
 });
 renderer.domElement.addEventListener('pointerup', (e) => {
   if (state.avatar) {
@@ -700,12 +778,13 @@ function updateMarkers() {
   ghost.count = 0; ghostArrow.visible = false;
   const xr = renderer.xr.isPresenting;
   const cur = state.avatar ? null : xr ? (aimCtrl?.source && !menuHover ? groundHit(aimCtrl) : null) : groundHit(null);
-  const at = drag?.mode === 'place' ? drag.start : cur;
-  if (list.length && at && (!drag || drag.mode === 'place')) {
+  if (drag && cur) drag.cur = cur.clone();
+  const boxing = !!drag && Math.hypot(drag.cur.x - drag.start.x, drag.cur.z - drag.start.z) > BOX_MIN;
+  const at = drag ? drag.start : cur;
+  if (list.length && at && !boxing) {
     const enemy = soldierAt(at, 5);
     if (!(enemy && state.started && list.every((q) => q.side !== enemy.side))) {
       let facing = aimFacing();
-      if (!xr && drag && cur && Math.hypot(cur.x - drag.start.x, cur.z - drag.start.z) > 8) facing = Math.atan2(cur.x - drag.start.x, cur.z - drag.start.z);
       const m = new THREE.Matrix4(), v = new THREE.Vector3();
       let n = 0;
       for (const a of groupFormation(list, at, facing)) {
@@ -718,9 +797,9 @@ function updateMarkers() {
     }
   }
   // prostokąt zaznaczania
-  boxLine.visible = drag?.mode === 'box' && !!cur;
+  boxLine.visible = boxing;
   if (boxLine.visible) {
-    const a = drag.start, y = Math.max(field.heightAt(a.x, a.z), field.heightAt(cur.x, cur.z)) + 1.5, pts = boxLine.geometry.attributes.position;
+    const a = drag.start, cur = drag.cur, y = Math.max(field.heightAt(a.x, a.z), field.heightAt(cur.x, cur.z)) + 1.5, pts = boxLine.geometry.attributes.position;
     [[a.x, a.z], [cur.x, a.z], [cur.x, cur.z], [a.x, cur.z], [a.x, a.z]].forEach(([x, z], k) => pts.setXYZ(k, x, y, z));
     pts.needsUpdate = true;
   }
@@ -739,13 +818,30 @@ renderer.setAnimationLoop(() => {
   const sdt = dt * state.speed, n = Math.ceil(sdt / 0.04);
   for (let i = 0; i < n; i++) simStep(sdt / n);
   updateAvatar(dt);
+  updateMarch(dt);
+  // oddział gracza: po wykonaniu rozkazu wraca za dowódcą
+  if (state.avatar && player && player.sq && !player.sq.routed && (!player.sq.order || (player.sq.order.type === 'move' && player.sq.order.reached && player.sq.order.auto))) army.order(player.sq, { type: 'follow', soldier: player });
+  hitT = Math.max(0, hitT - dt);
+  hitMark.mesh.visible = hitT > 0;
+  if (hitT > 0) hitMark.mesh.scale.setScalar((hitKill ? 1.35 : 1) * (1 + Math.max(0, hitT - 0.12) * 2));
+  aimRing.visible = false; let aimDist = 0;
+  if (state.avatar && player) {
+    const lc = ctrls.find((o) => o.hand === 'left' && o.source);
+    const p = xr ? (lc ? groundHit(lc) : null) : (mouse.set(0, 0), mouseInside = true, groundHit(null));
+    const t = p && soldierAt(p, 8);
+    if (t && t.side !== player.side) {
+      const [cx, cz] = army.center(t.sq);
+      aimDist = lc ? toWorld(p.clone()).distanceTo(lc.c.getWorldPosition(new THREE.Vector3())) : 0;
+      aimRing.visible = true; aimRing.position.set(cx, field.heightAt(cx, cz) + 0.6, cz); aimRing.scale.setScalar(Math.max(8, TYPES[t.sq.type].cols * 1.7 * UNIT_K * 0.7));
+    }
+  }
   scene.updateMatrixWorld();
   army.lod = state.avatar || tableRoot.scale.x > 12 || (!xr && camera.position.distanceTo(controls.target) < 0.12) ? 'hi' : 'lo';
   army.render(state.avatar ? null : sel, state.avatar);
   updateMarkers();
   // łuk: naciąganie widać po strzale cofanej do twarzy
   if (state.avatar && player?.type === 'bow' && weapons.arrow.visible) weapons.arrow.position.z = drawStart !== null ? Math.min(0.5, (clockT - drawStart) * 0.6) : 0;
-  for (const o of ctrls) if (o.source) o.ray.scale.z = menuHit && o === aimCtrl ? menuHit.distance : state.avatar ? 0.5 : 2;
+  for (const o of ctrls) if (o.source) o.ray.scale.z = menuHit && o === aimCtrl ? menuHit.distance : state.avatar ? (o.hand === 'left' && aimDist ? aimDist : 0.5) : 2;
   if (!state.avatar) updateSun();
   field.glowMaterial.color.setHex(table.active ? 0xffe8b0 : 0xffc860);
   const blue = army.sideAlive(0), red = army.sideAlive(1);

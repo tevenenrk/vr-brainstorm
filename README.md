@@ -299,8 +299,11 @@ Oddział, który straci 2/3 ludzi przy wrogu, **ucieka** i po kilkunastu sekunda
 bez rozkazu albo po dojściu na miejsce sam kontratakuje wroga, który podejdzie.
 
 **Dowodzenie (widok makiety):**
-- Spust na żołnierza albo sztandar dodaje oddział do zaznaczenia albo go z niego usuwa. Można zaznaczyć wiele oddziałów.
-- Spust przytrzymany na pustej ziemi (bez zaznaczenia) i przeciągnięty zaznacza prostokątem wszystkie oddziały w obszarze.
+- Przeciągnięcie spustem po terenie zawsze zaznacza prostokątem wszystkie oddziały w środku i zastępuje
+  poprzednie zaznaczenie.
+- Krótkie kliknięcie na żołnierza albo sztandar dodaje oddział do zaznaczenia albo go z niego usuwa.
+- **Dwuklik** w ten sam cel wysyła oddziały **biegiem** (szybki marsz albo atak biegiem).
+- Maszerujące oddziały słychać: tupot kroków z pobrzękiwaniem zbroi, jazda niżej i ciężej.
 - Klik prawej gałki odznacza wszystko.
 - Gdy kontroler celuje w teren, w miejscu docelowym widać **zarys szyku**, czyli kropki w miejscu każdego żołnierza:
   - piechota (żółte) stoi w linii frontu, łucznicy (zielone) za nią, a jazda (pomarańczowa) na skrzydłach;
@@ -334,6 +337,11 @@ Przyciski:
   - lewy spust na wroga: „atak!”;
   - **X**: „za mną!”;
   - **Y**: „do ataku!”.
+
+Twój oddział chodzi za Tobą. Lewy spust na wrogi oddział (wskazany oddział podświetla się na czerwono) sprawia,
+że oddział rusza na niego **biegiem**, a po rozbiciu wroga wraca za Tobą. Każde trafienie mieczem, włócznią
+albo strzałą daje wibrację kontrolera, białe **X** na środku widoku i krótkie „tyk”. Zabicie daje czerwone,
+większe X i podwójny dźwięk.
 
 Gdy zginiesz, wracasz do widoku makiety.
 

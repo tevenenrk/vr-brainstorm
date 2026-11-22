@@ -198,12 +198,12 @@ export class Army {
     }
     if (!o) return;
     let tx = sq.ax, tz = sq.az, wantFacing = sq.facing, speed = T.walk;
-    if (o.type === 'move') { tx = o.x; tz = o.z; if (o.facing !== undefined && Math.hypot(tx - sq.ax, tz - sq.az) < 2) wantFacing = o.facing; }
+    if (o.type === 'move') { tx = o.x; tz = o.z; if (o.run) speed = T.run; if (o.facing !== undefined && Math.hypot(tx - sq.ax, tz - sq.az) < 2) wantFacing = o.facing; }
     else if (o.type === 'attack') {
       const [ex, ez] = this.center(o.squad);
       const d = Math.hypot(ex - sq.ax, ez - sq.az);
       if (sq.type === 'bow') { if (d > T.range * 0.85) { tx = ex; tz = ez; } else if (d < 30) { tx = sq.ax - (ex - sq.ax) / d * 20; tz = sq.az - (ez - sq.az) / d * 20; } }
-      else { tx = ex; tz = ez; if (d < (T.mount ? 130 : 40)) speed = T.run; }
+      else { tx = ex; tz = ez; if (d < (T.mount ? 130 : 40) || o.run) speed = T.run; }
       wantFacing = Math.atan2(ex - sq.ax, ez - sq.az);
       // jazda: po kilku sekundach zwarcia odskakuje i szarżuje ponownie
       if (T.mount) {
@@ -274,7 +274,7 @@ export class Army {
       const p = this.slotPos(sq, s);
       gx = p[0]; gz = p[1];
       if (sq.routed) speed = T.run;
-      else if (Math.hypot(gx - s.x, gz - s.z) > 6) speed = T.run;
+      else if (Math.hypot(gx - s.x, gz - s.z) > (o && o.run ? 1.2 : 6)) speed = T.run;
       // łucznicy strzelają do celu oddziału
       if (s.type === 'bow' && o && o.type === 'attack' && s.cd <= 0 && !sq.routed) {
         const tgts = this.alive(o.squad);
@@ -309,6 +309,7 @@ export class Army {
   damage(t, dmg, from) {
     if (t.state !== 'alive') return;
     t.hp -= dmg;
+    if (from && from.isPlayer && t.side !== from.side && this.onPlayerDealt) this.onPlayerDealt(t, dmg, t.hp <= 0);
     if (t.isPlayer && this.onPlayerHit) this.onPlayerHit(dmg, from);
     if (t.hp <= 0) {
       t.state = 'dead'; t.t = 0;
