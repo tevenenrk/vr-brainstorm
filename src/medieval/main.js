@@ -11,7 +11,7 @@ import { bakeKnight } from './knight.js';
 const params = new URLSearchParams(location.search);
 const SHADOWS = params.get('shadows') !== '0';
 const SPEEDS = [0.25, 0.5, 1, 2, 3];
-const TYPE_KEYS = ['sword', 'bow', 'spear', 'cav'];
+const TYPE_KEYS = ['sword', 'bow', 'spear', 'cav', 'cat'];
 
 // ---------- panele ----------
 class MHud extends CanvasPanel {
@@ -142,6 +142,12 @@ const sound = new Sound(camera, scene);
   const ctx = sound.listener.context, sr = ctx.sampleRate, n = Math.floor(sr * 0.35), buf = ctx.createBuffer(1, n, sr), d = buf.getChannelData(0);
   for (let i = 0; i < n; i++) { const t = i / sr; d[i] = (Math.sin(2 * Math.PI * 1250 * t) * 0.5 + Math.sin(2 * Math.PI * 1870 * t) * 0.35 + (Math.random() - 0.5) * 0.3 * Math.exp(-t * 60)) * Math.exp(-t * 12); }
   sound.buffers.clang = buf;
+  sound.buffers.thud = sound.makeBoom(ctx, 1.1, 650, 38, 5);
+  // katapulta: trzask ramienia o poprzeczkę + świst
+  const m = Math.floor(sr * 0.5), b2 = ctx.createBuffer(1, m, sr), e = b2.getChannelData(0);
+  let lp = 0;
+  for (let i = 0; i < m; i++) { const t = i / sr; lp += 0.15 * ((Math.random() - 0.5) - lp); e[i] = (t < 0.03 ? (Math.random() - 0.5) * 1.4 * (1 - t / 0.03) : 0) + Math.sin(2 * Math.PI * 140 * t) * Math.exp(-t * 30) * 0.8 + lp * 2.5 * Math.exp(-((t - 0.2) ** 2) / 0.01); }
+  sound.buffers.launch = b2;
 }
 const army = new Army(field, mapGroup, effects);
 // model rycerza dla piechoty (dwa poziomy szczegółów: makieta i widok 1:1)
@@ -153,6 +159,8 @@ document.getElementById('hud').appendChild(hud.canvas);
 document.getElementById('menu').appendChild(menu.canvas);
 const toWorld = (p) => p.clone().applyMatrix4(mapGroup.matrixWorld);
 let lastSnd = 0, clockT = 0;
+army.onImpact = (p) => sound.play('thud', toWorld(p), state.avatar ? 1 : 0.7);
+army.onLaunch = (p) => sound.play('launch', toWorld(p), 0.6);
 army.onHit = (s) => { if (clockT - lastSnd < 0.06) return; lastSnd = clockT; sound.play('clang', toWorld(new THREE.Vector3(s.x, field.heightAt(s.x, s.z) + 2, s.z)), 0.4); };
 
 // tupot oddziałów w marszu: najbliższe maszerujące oddziały
@@ -177,7 +185,7 @@ function updateMarch(dt) {
     const a = marchSrc[marchI = (marchI + 1) % marchSrc.length];
     if (a.isPlaying) a.stop();
     a.setBuffer(sound.buffers.march); a.setRefDistance(state.avatar ? 5 : 0.35);
-    a.setVolume(Math.min(1, c.n / 18) * (c.sq.type === 'cav' ? 1.1 : 0.75)); a.playbackRate = (c.sq.type === 'cav' ? 0.7 : 1) * (0.92 + Math.random() * 0.16);
+    a.setVolume(Math.min(1, c.n / 18) * (c.sq.type === 'cav' ? 1.1 : c.sq.type === 'cat' ? 1.6 : 0.75)); a.playbackRate = (c.sq.type === 'cav' ? 0.7 : c.sq.type === 'cat' ? 0.45 : 1) * (0.92 + Math.random() * 0.16);
     a.position.copy(c.w); a.updateMatrixWorld(); a.play();
   }
 }
@@ -213,6 +221,7 @@ const msg = (t, c = '#9fe8b0') => { flash = { text: t, until: clockT + 2.5, colo
 function preset() {
   army.clear(); state.started = false; state.paused = true; sel.clear();
   for (const side of [0, 1]) for (const t of ['cav', 'spear', 'sword', 'sword', 'spear', 'bow', 'bow', 'sword', 'cav']) army.addSquad(side, t);
+    for (const side of [0, 1]) army.addSquad(side, 'cat', 0, SIDES[side].home + SIDES[side].dir * -40);
   msg('Armie rozstawione — możesz je przestawić, potem START');
 }
 function toggleMenu(v) { const show = v ?? !menu.mesh.visible; menu.mesh.visible = show; hud.mesh.visible = !show; document.getElementById('menu').style.display = show ? 'block' : 'none'; }
@@ -262,7 +271,7 @@ function aimFacing() {
   return Math.atan2(d.x, d.z);
 }
 // szyk grupy: piechota w linii frontu, łucznicy za nią, jazda na skrzydłach (kolejność jak obecnie, bez krzyżowania)
-const ROLE = (t) => (t === 'bow' ? 'back' : t === 'cav' ? 'wing' : 'front');
+const ROLE = (t) => (t === 'bow' ? 'back' : t === 'cat' ? 'rear' : t === 'cav' ? 'wing' : 'front');
 function groupFormation(list, p, facing) {
   const c = Math.cos(facing), sn = Math.sin(facing), L = [c, -sn], Fv = [sn, c], GAP = 5;
   const proj = (q) => { const [x, z] = army.center(q); return x * L[0] + z * L[1]; };
@@ -270,9 +279,10 @@ function groupFormation(list, p, facing) {
   const width = (q) => (T(q).cols - 1) * (T(q).spx || SPX) + 3;
   const depth = (q) => Math.ceil(Math.max(1, army.alive(q).length) / T(q).cols) * (T(q).spz || SPX);
   const by = (r) => list.filter((q) => ROLE(q.type) === r).sort((a, b) => proj(a) - proj(b));
-  let front = by('front'), back = by('back');
+  let front = by('front'), back = by('back'), rear = by('rear');
   const wings = by('wing');
   if (!front.length) { front = back; back = []; }
+  if (!front.length) { front = rear; rear = []; }
   const out = [];
   const put = (q, lx, off) => out.push({ sq: q, x: p.x + L[0] * lx + Fv[0] * off, z: p.z + L[1] * lx + Fv[1] * off });
   const lay = (arr, off) => {
@@ -281,7 +291,9 @@ function groupFormation(list, p, facing) {
     return W;
   };
   const W = lay(front, 0);
-  if (back.length) lay(back, -(Math.max(...front.map(depth), 0) + 8));
+  const dF = Math.max(...front.map(depth), 0) + 8;
+  if (back.length) lay(back, -dF);
+  if (rear.length) lay(rear, -(dF + (back.length ? Math.max(...back.map(depth)) + 16 : 10)));
   let left = -W / 2 - GAP * 2, right = W / 2 + GAP * 2;
   wings.forEach((q, i) => {
     const w = width(q);
@@ -374,7 +386,7 @@ const weapons = {};
 function enterAvatar() {
   if (state.avatar) return;
   const pr = primary();
-  let sq = pr && pr.side === 0 ? pr : army.squads.find((q) => q.side === 0 && army.alive(q).length);
+  let sq = pr && pr.side === 0 && !TYPES[pr.type].siege ? pr : army.squads.find((q) => q.side === 0 && !TYPES[q.type].siege && army.alive(q).length);
   if (!sq) { msg('Brak oddziału do wcielenia', '#ff8a7a'); return; }
   const alive = army.alive(sq);
   player = alive.reduce((a, b) => (Math.abs(b.slot[0]) + Math.abs(b.slot[1]) < Math.abs(a.slot[0]) + Math.abs(a.slot[1]) ? b : a));
