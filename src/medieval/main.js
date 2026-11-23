@@ -89,7 +89,7 @@ class MMenu extends CanvasPanel {
     c.fillStyle = '#f4ead8'; c.font = '26px system-ui, sans-serif'; c.fillText('Tempo czasu', 30, y + 37);
     btn(250, y, 60, 54, '−', 'speed-'); c.fillStyle = '#fff'; c.font = 'bold 26px system-ui, sans-serif'; c.textAlign = 'center'; c.fillText(`${o.speed}×`, 370, y + 37); c.textAlign = 'left'; btn(430, y, 60, 54, '+', 'speed+');
     btn(510, y, 180, 54, 'Przed siebie', 'place'); y += 70;
-    row([['Artyleria', 'mode:index.html', '#2a3a5a'], ['Bitwa XX w.', 'mode:battle.html', '#2a3a5a'], ['Flak', 'mode:flak.html', '#3a4a1a'], ['Zamknij', 'close']], y); y += 76;
+    row([['Artyleria', 'mode:index.html', '#2a3a5a'], ['Bitwa XX w.', 'mode:battle.html', '#2a3a5a'], ['Okopy', 'mode:trench.html', '#4a3a1a'], ['Flak', 'mode:flak.html', '#3a4a1a'], ['Zamknij', 'close']], y); y += 76;
     c.font = '20px system-ui, sans-serif'; c.fillStyle = '#f4ead8';
     ['Rozstawianie: przed startem zaznacz oddział i wskaż miejsce —', 'oddział od razu tam staje (przeciągnięcie ustawia front).', 'Po wcieleniu dowodzisz tylko swoim oddziałem; reszta walczy sama.'].forEach((l, i) => c.fillText(l, 30, y + i * 26));
     this.tex.needsUpdate = true;

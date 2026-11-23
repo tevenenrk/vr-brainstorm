@@ -1,14 +1,15 @@
 # Stół Artyleryjski VR + Makieta Katastrof (Meta Quest 3 / 3S)
 
-Siedem trybów na lewitującej platformie i jeden w Twoim pokoju:
+Siedem trybów na lewitującej platformie, jeden w Twoim pokoju i jeden w okopie w skali 1:1:
 - **Artyleria** (`index.html`): bronisz wioski przed piechotą i czołgami.
 - **Makieta katastrof** (`disasters.html`): kwadratowy miniaturowy świat, na którym wywołujesz katastrofy.
 - **Stół pinów** (`pins.html`): matryca wysuwanych pinów (shape display), z której rzeźbisz powierzchnie i która manipuluje przedmiotami.
 - **Flak** (`flak.html`): obrona przeciwlotnicza na makiecie z artylerii, ze strefą wybuchów, synchronizacją salw i rolą pilota.
 - **Bitwa** (`battle.html`): dwie armie walczą same, a Ty obserwujesz i dosyłasz posiłki.
 - **Bomba w skali** (`nuke.html`): makieta 40 × 40 km z miastem i wybuch jądrowy w prawdziwych proporcjach, ze zwolnionym tempem.
-- **Bitwa średniowieczna** (`medieval.html`): miecznicy, łucznicy, włócznicy i kawaleria; rozstawiasz i dowodzisz oddziałami albo wcielasz się w żołnierza.
+- **Bitwa średniowieczna** (`medieval.html`): miecznicy, łucznicy, włócznicy, kawaleria i katapulty; rozstawiasz i dowodzisz oddziałami albo wcielasz się w żołnierza.
 - **Kostucha** (`reaper.html`): horror w Mixed Reality na zeskanowanym pokoju. Z Twoich drzwi wychodzi kostucha i powoli idzie do Ciebie.
+- **Obrona okopów** (`trench.html`): stoisz w okopie ze swoją drużyną i odpierasz kolejne fale wroga; amunicja się kończy, a magazynki noszone są w kieszeniach.
 
 Między trybami przełączasz się przyciskiem na stronie albo w menu w VR.
 
@@ -289,7 +290,8 @@ Pole bitwy 480 × 640 m w skali 1:400 (1,2 × 1,6 m na stole) z pagórkami, lasa
 |---|---|
 | **Miecznicy** | Szybkie ciosy i tarcza, która zatrzymuje większość strzał lecących z przodu. |
 | **Włócznicy** | Dłuższy zasięg i mocniejszy pierwszy cios na nadbiegającego wroga. |
-| **Łucznicy** | Salwy po balistycznym torze z wyprzedzeniem celu, a w zwarciu walczą słabo. |
+| **Łucznicy** | Strzelają jak najpłaściej (najmniejszy kąt, który doleci do celu, z wyprzedzeniem). Gdy płaski tor zasłaniają swoi, podnoszą łuk tylko tyle, ile trzeba, a jeśli to nie wystarcza, odsuwają się w bok. Nie strzelają w kłębowisko, gdzie przy wrogu stoją swoi. Strzała może zranić swojego. W zwarciu walczą słabo. |
+| **Katapulty** | Trzy machiny na kołach, powolne. Rzucają kamieniem po stromym łuku na 45–270 m, niecelnie; kamień rani wszystkich wokół miejsca upadku (także swoich), więc nie strzelają tam, gdzie ich ludzie walczą z wrogiem. Ramię wyrzuca kamień i powoli się naciąga. Słabo wrażliwe na strzały. |
 | **Kawaleria** | Jeźdźcy z kopiami, szybcy w galopie. Cios w pędzie (**szarża**) zawsze trafia i zadaje ×2,4 obrażeń. Po kilku sekundach zwarcia odskakują i szarżują znowu. Konie mają pancerz, więc strzały zadają im połowę obrażeń. |
 
 Kawaleria rozbija łuczników i zwykle wygrywa z miecznikami, ale **włócznicy** są jej kontrą: zadają koniom
@@ -452,6 +454,54 @@ adb reverse tcp:8000 tcp:8000          # Quest podłączony kablem, tryb dewelop
 ```
 Potem otwórz na Queście `http://localhost:8000` (localhost traktowany jest jak bezpieczny kontekst).
 
+## Tryb: Obrona okopów
+
+Widok 1:1 (VR albo komputer). Stoisz w linii okopów z drużyną 8 obrońców. Z mgły po drugiej stronie ziemi niczyjej
+(ok. 130–150 m, leje po pociskach, dwa pasy drutu kolczastego z przejściami) nadciągają **fale** wroga: biegną
+skokami, przyklękają za osłoną i strzelają, a z bliska rzucają granaty. Każda fala jest większa (8 + 5 × numer fali).
+Kto dobiegnie, wskakuje do okopu i ściga obrońców po **labiryncie** łączników, ślepych zaułków i okopu wspierającego
+(znajduje drogę A*). Między falami masz 25 s na uzupełnienie amunicji; po każdej fali przychodzi najwyżej 3 obrońców
+w posiłkach.
+
+**Okop:** stanowiska strzeleckie przy przedpiersiu z workami — stojąc, widzisz i strzelasz ponad workami, a gdy
+**kucniesz**, chowasz się (wróg widzi tylko to, co wystaje). Łączniki i okop wspierający są głębsze — głowa jest
+poniżej gruntu. Wysokość dopasowuje się sama do Twojego wzrostu po wejściu w VR (w menu: „Dopasuj wzrost”).
+
+**Broń:**
+- karabin automatyczny (30 naboi, kolimator, licznik naboi na boku),
+- pistolet (12 naboi),
+- granaty (zapalnik 3,6 s),
+- nóż (trafienie ostrzem w ruchu),
+- **miniguny** na trzech stanowiskach: amunicja bez końca, ale po ~7 s ciągłego ognia lufy rozgrzewają się
+  do czerwoności i broń się **przegrzewa** — trzeba poczekać, aż ostygnie (wskaźnik na broni, para z luf).
+
+**Amunicja jest skończona** — dla wszystkich. Magazynki nosisz w **kieszeniach** (ładownice na pasie: 4 magazynki
+karabinu, 3 pistoletu, 3 granaty). Więcej jest w **arsenale** w ziemiance za okopem wspierającym (skrzynie z licznikiem
+zapasu). Poległym (swoim i wrogom) można zabrać magazynki i granaty. Obrońcy też mają ograniczony zapas: gdy go
+wystrzelają, idą do arsenału, a gdy ten jest pusty — szukają amunicji przy poległych.
+
+**Sterowanie VR (wszystko fizycznie):**
+- **chwyt (grip)** przy prawym biodrze — pistolet; za prawym ramieniem — karabin; na lewej piersi — nóż;
+  puszczona broń wraca na swoje miejsce;
+- **chwyt przy pasie z przodu** — magazynek z lewej ładownicy (pistoletowe na lewym biodrze), granat z prawej;
+- **spust** — strzał (karabin seriami, pistolet pojedynczo); z granatem w dłoni spust wyciąga zawleczkę,
+  puszczenie chwytu = rzut (siła z ruchu ręki);
+- **A / X** — wyrzuć magazynek z broni w tej dłoni; nowy magazynek **przyłóż do gniazda** broni (pod spodem),
+  a sam wskoczy na miejsce;
+- puszczony **przy ładownicy** magazynek albo granat trafia do kieszeni (jeśli jest miejsce, pusty magazynek nie);
+- chwyt w skrzyni arsenału — magazynek/granat z zapasu; chwyt przy ciele poległego — jego magazynek albo granat;
+- lewa dłoń na łożu karabinu — trzymanie oburącz;
+- **minigun:** chwyć uchwyty z tyłu (jedną albo dwiema rękami), celujesz, przesuwając dłonie, spust — ogień;
+- lewa gałka — chód po okopie, prawa — obrót o 30°, **Y / B** — menu (pauza, od nowa, wzrost, inne tryby);
+- panel na lewym nadgarstku: życie, naboje, kieszenie, arsenał, fala.
+
+Trafienie wroga daje znacznik X, „tyk” i wibrację. Gdy dostajesz, ekran czerwienieje; życie odnawia się po kilku
+sekundach bez trafień. Kule przelatujące obok świszczą.
+
+**Na komputerze:** klik — przechwyć mysz, `WASD` (`Shift` bieg), `C` — kucnij, LPM — strzał, PPM — celowanie przez
+przyrządy, `1`–`4` — karabin/pistolet/granat/nóż, `R` — przeładuj z kieszeni, `G` — granat, `E` — minigun (wejdź/zejdź)
+albo uzupełnij w arsenale / zabierz poległemu / podnieś, `Enter` — start/pauza, `O` — menu.
+
 ## Parametry URL
 - `?seed=42`: inny losowy teren (las, kolory, ukształtowanie).
 - `?shadows=0`: wyłącza cienie, jeśli brakuje płynności.
@@ -489,3 +539,8 @@ Potem otwórz na Queście `http://localhost:8000` (localhost traktowany jest jak
   - Tunel ze światłem.
   - Miejsce sądu z wagą, niebo i piekło (`judgement.js`).
   - Dźwięki proceduralne i przebieg sceny.
+- `src/trench/world.js`, `src/trench/soldiers.js`, `src/trench/gear.js`, `src/trench/audio.js`, `src/trench/main.js`: tryb Obrona okopów.
+  - Mapa okopów na siatce 1 m (stanowiska, łączniki, ziemianka), teren z lejami i drutem, linia wzroku i A*.
+  - Żołnierze z części instancjonowanych, AI natarcia, walki w okopie i zaopatrzenia.
+  - Broń, magazynki, granaty z fizyką, miniguny z przegrzewaniem, efekty.
+  - Kieszenie, kabury, interakcje VR, sterowanie na komputerze, fale i dźwięki proceduralne.

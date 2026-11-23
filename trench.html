@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Obrona Okopów VR</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #2a2a26; overflow: hidden; font-family: system-ui, sans-serif; color: #ece6d6; }
+    #app canvas { display: block; }
+    #panel { position: fixed; left: 16px; top: 16px; max-width: 400px; background: rgba(24, 22, 16, 0.88); border: 1px solid rgba(210, 190, 130, 0.4); border-radius: 14px; padding: 16px 18px; box-shadow: 0 8px 30px rgba(0,0,0,0.35); }
+    #panel h1 { margin: 0 0 6px; font-size: 20px; color: #f2e8cc; }
+    #panel p { margin: 6px 0; font-size: 13px; line-height: 1.45; color: #d0c8b0; }
+    .btns { display: flex; gap: 8px; margin: 12px 0 6px; flex-wrap: wrap; }
+    button, a.btn { font: 600 15px system-ui, sans-serif; padding: 10px 14px; border-radius: 10px; border: 0; background: #d8c48a; color: #22180a; cursor: pointer; text-decoration: none; }
+    button.alt, a.btn.alt { background: #cfe0e8; color: #102233; }
+    button:disabled { background: #3e3c34; color: #8a8676; cursor: not-allowed; }
+    #xr-note { color: #ffcf8a; min-height: 1em; }
+    kbd { background: #3a362c; border-radius: 4px; padding: 1px 5px; font-size: 12px; }
+    #hud { position: fixed; right: 16px; top: 16px; }
+    #hud canvas { width: 320px; height: auto; display: block; }
+    #msg { position: fixed; left: 0; right: 0; top: 24%; text-align: center; font: bold 30px system-ui, sans-serif; text-shadow: 0 2px 8px #000; pointer-events: none; }
+    #cross { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(255,255,255,0.8); box-shadow: 0 0 3px #000; pointer-events: none; }
+    #menu { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); display: none; background: rgba(24, 22, 16, 0.94); border: 1px solid rgba(210, 190, 130, 0.5); border-radius: 14px; padding: 18px 22px; }
+    #menu button { display: block; width: 260px; margin: 8px 0; }
+    body.in-xr #panel, body.in-xr #hud, body.in-xr #msg, body.in-xr #cross, body.in-xr #menu { display: none !important; }
+  </style>
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three/build/three.module.min.js", "three/addons/": "./vendor/three/addons/" } }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="panel">
+    <h1>Obrona okopów</h1>
+    <p>Bronisz linii okopów ze swoją drużyną. Kolejne fale wroga nadciągają przez ziemię niczyją; jeśli przełamią linię, walka przenosi się do labiryntu okopów. Amunicja się kończy — magazynki i granaty uzupełnisz w arsenale w ziemiance albo zabierzesz poległym. Na stanowiskach stoją miniguny: bez końca amunicji, ale się przegrzewają.</p>
+    <div class="btns">
+      <button id="btn-vr">Wejdź w VR</button>
+      <button id="btn-start" class="alt">Graj na komputerze</button>
+      <a class="btn alt" href="index.html">Artyleria</a>
+      <a class="btn alt" href="battle.html">Bitwa XX w.</a>
+      <a class="btn alt" href="medieval.html">Bitwa średniowieczna</a>
+      <a class="btn alt" href="reaper.html">Kostucha</a>
+    </div>
+    <p id="xr-note"></p>
+    <p><b>VR:</b> chwyt (grip) przy biodrze/plecach/klatce — weź pistolet/karabin/nóż; przy pasie z przodu — magazynek (lewa ładownica) albo granat (prawa); spust — strzał, z granatem spust wyciąga zawleczkę, puszczenie chwytu = rzut; <kbd>A</kbd>/<kbd>X</kbd> — wyrzuć magazynek, nowy włóż, przykładając go do gniazda broni; puszczony przy ładownicy magazynek trafia do kieszeni. Lewą dłonią złap łoże karabinu — stabilniej. Minigun: chwyć oba uchwyty z tyłu. Kucnij, by się schować. Lewa gałka — chód, prawa — obrót, <kbd>Y</kbd>/<kbd>B</kbd> — menu.</p>
+    <p><b>Komputer:</b> klik — przechwyć mysz, <kbd>WASD</kbd> (<kbd>Shift</kbd> bieg), <kbd>C</kbd> kucnij, LPM strzał, PPM celowanie, <kbd>1</kbd>–<kbd>4</kbd> karabin/pistolet/granat/nóż, <kbd>R</kbd> przeładuj z kieszeni, <kbd>G</kbd> granat, <kbd>E</kbd> minigun / arsenał / zabierz poległemu / podnieś, <kbd>Enter</kbd> start/pauza, <kbd>O</kbd> menu.</p>
+  </div>
+  <div id="hud"></div>
+  <div id="msg"></div>
+  <div id="cross"></div>
+  <div id="menu">
+    <button data-act="run">Start / pauza</button>
+    <button data-act="restart">Od nowa</button>
+    <button data-act="mode:index.html" class="alt">Artyleria</button>
+    <button data-act="mode:medieval.html" class="alt">Bitwa średniowieczna</button>
+  </div>
+  <script type="module" src="./src/trench/main.js"></script>
+</body>
+</html>
