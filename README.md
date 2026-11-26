@@ -460,7 +460,10 @@ Widok 1:1 (VR albo komputer). Stoisz w linii okopów z drużyną 8 obrońców. Z
 (ok. 130–150 m, leje po pociskach, dwa pasy drutu kolczastego z przejściami) nadciągają **fale** wroga: biegną
 skokami, przyklękają za osłoną i strzelają, a z bliska rzucają granaty. Każda fala jest większa (8 + 5 × numer fali).
 Kto dobiegnie, wskakuje do okopu i ściga obrońców po **labiryncie** łączników, ślepych zaułków i okopu wspierającego
-(znajduje drogę A*). Między falami masz 25 s na uzupełnienie amunicji; po każdej fali przychodzi najwyżej 3 obrońców
+(znajduje drogę A*). Z okopu można **wyjść po drabince** (cztery przy stanowiskach strzeleckich — na przedpole,
+dwie przy tylnej ścianie okopu wspierającego): podejdź i idź w jej stronę albo chwyć szczebel, a wspinasz się sam.
+Na przedpolu chodzisz swobodnie (przez drut kolczasty powoli), ale jesteś odsłonięty; wracasz po drabince albo
+wskakując do okopu. Między falami masz 25 s na uzupełnienie amunicji; po każdej fali przychodzi najwyżej 3 obrońców
 w posiłkach. Falę możesz też **wezwać sam** w każdej chwili (menu → „Wezwij falę teraz”, na komputerze `N`), nawet gdy
 poprzednia trwa; przełącznik „Fale: automatyczne / na żądanie” wyłącza samoczynne nadchodzenie fal.
 
@@ -514,7 +517,7 @@ sekundach bez trafień. Kule przelatujące obok świszczą.
 **Na komputerze:** klik — przechwyć mysz, `WASD` (`Shift` bieg), `C` — kucnij, LPM — strzał, PPM — celowanie przez
 przyrządy, `1`–`4` — karabin/pistolet/granat/nóż, `R` — przeładuj z kieszeni, `G` — granat, `E` — minigun (wejdź/zejdź)
 albo uzupełnij w arsenale / zabierz poległemu / podnieś, `F` — przyciągnij wskazany przedmiot (trafia do kieszeni),
-`T` — artyleria (cel celownikiem, LPM — ogień), `N` — wezwij falę, `Enter` — start/pauza, `O` — menu.
+`T` — artyleria (cel celownikiem, LPM — ogień), `N` — wezwij falę, `Spacja` — drabinka, `Enter` — start/pauza, `O` — menu.
 
 ## Parametry URL
 - `?seed=42`: inny losowy teren (las, kolory, ukształtowanie).

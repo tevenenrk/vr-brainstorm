@@ -110,7 +110,23 @@ export class TrenchMap {
     for (const b of this.bays) for (const f of [0.25, 0.75]) this.posts.push(new THREE.Vector2(b.x0 + (b.x1 - b.x0) * f, -1.25));
     this.arsenal = { pos: new THREE.Vector3(0, DUG_FLOOR, 23.6), cell: [0, 22] };
     this.spawnPoint = new THREE.Vector2(4.5, -1.1);
+    // drabinki: przy przedniej ścianie stanowisk (wyjście na przedpole) i przy tylnej ścianie okopu wspierającego
+    // side: kierunek wyjścia (−1 = w stronę wroga, +1 = do tyłu)
+    this.ladders = [];
+    const lad = (x, wallZ, side) => {
+      const fl = this.floorAt(x, wallZ - side * 0.5), top = Math.max(0, this.heightAt(x, wallZ + side * 0.5));
+      this.ladders.push({ x, wallZ, side, floor: fl, top, bottom: new THREE.Vector2(x, wallZ - side * 0.6), exit: new THREE.Vector2(x, wallZ + side * 1.6) });
+    };
+    for (const x of [-36.5, -16.5, 13.5, 33.5]) lad(x, -2, -1);
+    for (const x of [-20.5, 19.5]) lad(x, 16, 1);
   }
+  // nawierzchnia dla gracza poza okopem (dach ziemianki to grunt, worki można przejść)
+  surfaceAt(x, z) {
+    const k = this.idx(x, z);
+    if (k >= 0 && this.cells[k] !== T_GROUND) return this.covered(x, z) ? 0.05 : this.floorH[k];
+    return this.heightAt(x, z);
+  }
+  inBounds(x, z) { return x > TX0 + 4 && x < TX1 - 4 && z > TZ0 + 6 && z < TZ1 - 4; }
   idx(x, z) {
     const i = Math.floor(x - ZX0), j = Math.floor(z - ZZ0);
     if (i < 0 || j < 0 || i >= GW || j >= GD) return -1;
@@ -435,5 +451,16 @@ export class TrenchMap {
     dug.add(new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.06, 0.8).translate(-2.2, DUG_FLOOR + 0.75, 21.2), new THREE.MeshLambertMaterial({ color: 0x5a4430 })));
     for (const [x, z] of [[-3.3, 20.9], [-1.1, 20.9], [-3.3, 21.5], [-1.1, 21.5]]) dug.add(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.75, 0.06).translate(x, DUG_FLOOR + 0.375, z), new THREE.MeshLambertMaterial({ color: 0x3a2a1c })));
     this.group.add(dug);
+    // drabinki (dwa ramiona + szczeble), oparte o ścianę okopu
+    const wood = new THREE.MeshLambertMaterial({ color: 0x6a5034 });
+    for (const L of this.ladders) {
+      const g = new THREE.Group();
+      const h = L.top + 0.55 - L.floor, lean = 0.32;
+      for (const sx of [-0.24, 0.24]) g.add(new THREE.Mesh(new THREE.BoxGeometry(0.06, h, 0.07).translate(sx, h / 2, 0), wood));
+      for (let y = 0.25; y < h - 0.1; y += 0.3) g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.48, 6).rotateZ(Math.PI / 2).translate(0, y, 0), wood));
+      g.position.set(L.x, L.floor, L.wallZ - L.side * (lean + 0.06));
+      g.rotation.x = L.side * Math.atan2(lean, h);        // górą do ściany
+      this.group.add(g);
+    }
   }
 }

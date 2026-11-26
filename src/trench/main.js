@@ -135,7 +135,7 @@ class Banner extends CanvasPanel {
   }
 }
 class Menu extends CanvasPanel {
-  constructor() { super(720, 790, 0.6); this.buttons = []; this.hover = -1; this.mesh.visible = false; this.mesh.material.depthTest = false; this.mesh.renderOrder = 9500; }
+  constructor() { super(720, 820, 0.6); this.buttons = []; this.hover = -1; this.mesh.visible = false; this.mesh.material.depthTest = false; this.mesh.renderOrder = 9500; }
   hit(px, py) { return this.buttons.findIndex((b) => px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h); }
   draw(o) {
     const key = JSON.stringify([o, this.hover]); if (key === this.last) return; this.last = key;
@@ -149,7 +149,7 @@ class Menu extends CanvasPanel {
     btn(30, y, 210, 56, 'Artyleria', 'mode:index.html', '#2a3a5a'); btn(255, y, 210, 56, 'Bitwa średniow.', 'mode:medieval.html', '#2a3a5a'); btn(480, y, 210, 56, 'Kostucha', 'mode:reaper.html', '#2a3a5a'); y += 70;
     btn(30, y, 660, 56, 'Zamknij menu', 'close'); y += 80;
     c.font = '21px system-ui'; c.fillStyle = '#f4ead8';
-    ['Chwyt (grip): weź broń z kabury / magazynek z kieszeni / z arsenału.', 'Spust: strzał · granat: spust = zawleczka, puść chwyt = rzut.', 'A / X: wyrzuć magazynek · włóż nowy, przykładając go do broni.', 'Puść magazynek przy kieszeni na pasie — schowasz go.', 'Pusta ręka + spust: najbliższy przedmiot (wskazany) leci do dłoni.', 'Wciśnij gałkę: artyleria — wskaż cel, spust = ogień.', 'Minigun: chwyć uchwyty z tyłu, spust = ogień, uważaj na temperaturę.', 'Kucnij, by schować się za workami. Lewa gałka: chód, prawa: obrót.'].forEach((l, i) => c.fillText(l, 30, y + i * 30));
+    ['Chwyt (grip): weź broń z kabury / magazynek z kieszeni / z arsenału.', 'Spust: strzał · granat: spust = zawleczka, puść chwyt = rzut.', 'A / X: wyrzuć magazynek · włóż nowy, przykładając go do broni.', 'Puść magazynek przy kieszeni na pasie — schowasz go.', 'Pusta ręka + spust: najbliższy przedmiot (wskazany) leci do dłoni.', 'Drabinka: idź w jej stronę albo chwyć szczebel — wyjście z okopu.', 'Wciśnij gałkę: artyleria — wskaż cel, spust = ogień.', 'Minigun: chwyć uchwyty z tyłu, spust = ogień, uważaj na temperaturę.', 'Kucnij, by schować się za workami. Lewa gałka: chód, prawa: obrót.'].forEach((l, i) => c.fillText(l, 30, y + i * 30));
     this.tex.needsUpdate = true;
   }
 }
@@ -259,6 +259,9 @@ function grab(h) {
   const hp = h.pos;
   // minigun
   for (const g of guns) for (let k = 0; k < 2; k++) if (g.handleWorld(k).distanceTo(hp) < 0.16) { h.mg = { g, k }; pulse(h, 0.5, 40); return; }
+  // szczebel drabinki: wspinaczka w górę albo zejście
+  const rung = !P.climb && ladderAtHand(hp);
+  if (rung && !slotAt(h)) { startClimb(rung.lad, rung.dir); pulse(h, 0.4, 40); return; }
   // druga ręka na łożu karabinu
   const o = other(h);
   if (o.held?.kind === 'rifle' && GUNS.rifle.fore.clone().applyMatrix4(P.rifle.mesh.matrixWorld).distanceTo(hp) < 0.13) { h.support = true; pulse(h, 0.3, 30); return; }
@@ -397,7 +400,7 @@ function hurt(dmg, snd = 'flesh') {
   if (P.hp <= 0) die();
 }
 function die() {
-  P.alive = false; P.hp = 0; state.phase = 'dead'; state.dead = 0;
+  P.alive = false; P.hp = 0; state.phase = 'dead'; state.dead = 0; P.climb = null;
   for (const h of hands) { if (h.held?.kind === 'item') release(h); h.held = null; h.mg = null; h.support = false; }
   msg(`Poległeś. Przetrwane fale: ${Math.max(0, state.wave - 1)} · zabici: ${P.kills}`, '#ff8a7a', 1e9);
 }
@@ -453,7 +456,7 @@ function clearAll() {
 function startGame() {
   clearAll();
   Object.assign(ars, { rifle: 40, pistol: 20, grenade: 24 }); drawCrates();
-  Object.assign(P, { alive: true, hp: 100, regenT: 0, kills: 0 });
+  Object.assign(P, { alive: true, hp: 100, regenT: 0, kills: 0, surface: false, climb: null });
   P.rifle.mag = { rounds: 30 }; P.pistol.mag = { rounds: 12 };
   P.pouch = { rifle: [30, 30, 30, 30], pistol: [12, 12], grenade: 2 };
   state.phase = 'prep'; state.timer = 20; state.wave = 0; state.paused = false; state.dead = 0;
@@ -535,12 +538,74 @@ function calibrate() {
 
 // ---------- ruch ----------
 function tryMove(dx, dz) {
+  if (P.climb) return;
   const h = camera.getWorldPosition(V());
+  const L = ladderFor(h, dx, dz);
+  if (L) { startClimb(L.lad, L.dir); return; }
+  if (P.surface) {
+    // poza okopem: wszędzie w granicach mapy, przez drut kolczasty powoli
+    const slow = map.wireAt(h.x + dx, h.z + dz) ? 0.3 : 1;
+    if (map.inBounds(h.x + dx * slow, h.z + dz * slow)) { rig.position.x += dx * slow; rig.position.z += dz * slow; }
+    return;
+  }
   const nx = h.x + dx, nz = h.z + dz;
   const ok = (x, z) => map.walkable(x, z) && map.walkable(x + 0.2, z) && map.walkable(x - 0.2, z) && map.walkable(x, z + 0.2) && map.walkable(x, z - 0.2);
   if (ok(nx, nz)) { rig.position.x += dx; rig.position.z += dz; }
   else if (ok(nx, h.z)) rig.position.x += dx;
   else if (ok(h.x, nz)) rig.position.z += dz;
+}
+// ---------- drabinki: wyjście z okopu i zejście ----------
+function ladderFor(h, dx, dz) {
+  if (Math.hypot(dx, dz) < 1e-5) return null;
+  for (const lad of map.ladders) {
+    if (!P.surface) { if (Math.abs(h.x - lad.x) < 0.55 && Math.abs(h.z - lad.bottom.y) < 0.75 && dz * lad.side > 0 && Math.abs(dz) > Math.abs(dx) * 0.5) return { lad, dir: 'up' }; }
+    else if (Math.abs(h.x - lad.x) < 0.7 && Math.abs(h.z - lad.exit.y) < 0.9 && dz * lad.side < 0 && Math.abs(dz) > Math.abs(dx) * 0.5) return { lad, dir: 'down' };
+  }
+  return null;
+}
+function ladderAtHand(hp) {
+  const h = camera.getWorldPosition(V());
+  for (const lad of map.ladders) {
+    const lz = lad.wallZ - lad.side * 0.2;
+    if (Math.abs(hp.x - lad.x) > 0.4 || Math.abs(hp.z - lz) > 0.5 || hp.y < lad.floor + 0.15 || hp.y > lad.top + 0.8) continue;
+    if (!P.surface && Math.abs(h.x - lad.x) < 1.2 && Math.abs(h.z - lad.bottom.y) < 1.3) return { lad, dir: 'up' };
+    if (P.surface && Math.abs(h.x - lad.x) < 1.3 && Math.abs(h.z - lad.exit.y) < 1.6) return { lad, dir: 'down' };
+  }
+  return null;
+}
+function deskClimb() {
+  const h = camera.getWorldPosition(V());
+  for (const lad of map.ladders) {
+    if (!P.surface && Math.abs(h.x - lad.x) < 1.2 && Math.abs(h.z - lad.bottom.y) < 1.4) return startClimb(lad, 'up');
+    if (P.surface && Math.abs(h.x - lad.x) < 1.3 && Math.abs(h.z - lad.exit.y) < 1.6) return startClimb(lad, 'down');
+  }
+  msg('Podejdź do drabinki', '#c8c0a8', 1.2);
+}
+const CL_T1 = 1.0, CL_T2 = 1.45;
+function startClimb(lad, dir) {
+  if (P.climb || !P.alive) return;
+  const h = camera.getWorldPosition(V());
+  P.climb = { lad, dir, t: 0, from: V().set(h.x, rig.position.y + FLOOR - base, h.z), step: 0 };
+  crouch = false;
+}
+function climbPath(lad, s) {
+  const e = (k) => k * k * (3 - 2 * k);
+  if (s < CL_T1) { const k = e(s / CL_T1); return V().set(lad.x, lad.floor + (lad.top + 0.05 - lad.floor) * k, lad.bottom.y + (lad.wallZ - lad.bottom.y) * k); }
+  const k = e((s - CL_T1) / (CL_T2 - CL_T1)), gz = lad.wallZ + (lad.exit.y - lad.wallZ) * k;
+  return V().set(lad.x, lad.top + 0.05 + (map.surfaceAt(lad.x, lad.exit.y) - lad.top - 0.05) * k, gz);
+}
+function updateClimb(dt) {
+  const C = P.climb; C.t += dt;
+  const up = C.dir === 'up', s = up ? C.t : CL_T2 - C.t;
+  const p = climbPath(C.lad, Math.max(0, Math.min(CL_T2, s)));
+  const b = Math.min(1, C.t / 0.25);
+  p.lerp(C.from, 1 - b);
+  const h = camera.getWorldPosition(V());
+  rig.position.x += p.x - h.x; rig.position.z += p.z - h.z; rig.position.y = p.y - FLOOR + base;
+  // szczeble: drgnięcie i stuk
+  const st = Math.floor(C.t / 0.22);
+  if (st !== C.step && C.t < (up ? CL_T1 : CL_T2)) { C.step = st; for (const hh of hands) pulse(hh, 0.25, 20); audio.play('click', V().set(C.lad.x, p.y + 0.6, C.lad.wallZ), 0.5, 0.6, 1); }
+  if (C.t >= CL_T2) { P.climb = null; P.surface = up; msg(up ? 'Na przedpolu! Uważaj — jesteś odsłonięty' : 'Z powrotem w okopie', up ? '#ffb070' : '#9fe8b0', 1.8); }
 }
 function snapTurn(a) {
   const h0 = camera.getWorldPosition(V());
@@ -613,6 +678,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyF') deskPull();
   if (e.code === 'KeyT') artToggle('desk');
   if (e.code === 'KeyN') callWave();
+  if (e.code === 'Space') { e.preventDefault(); deskClimb(); }
   if (e.code === 'Enter') { if (state.phase === 'idle' || state.phase === 'dead') startGame(); else state.paused = !state.paused; }
   if (e.code === 'KeyO' || e.code === 'Escape') { document.getElementById('menu').style.display = document.getElementById('menu').style.display === 'block' ? 'none' : 'block'; }
 });
@@ -1016,7 +1082,13 @@ function frame() {
   if (xr) pollXR(dt); else updateDesktop(dt);
   // wysokość: dno pod głową
   const hh = camera.getWorldPosition(V());
-  if (map.walkable(hh.x, hh.z)) rig.position.y += (map.floorAt(hh.x, hh.z) - FLOOR + base - rig.position.y) * Math.min(1, dt * 8);
+  if (P.climb) updateClimb(dt);
+  else if (P.surface) {
+    // z przedpola można wpaść do okopu (poza dachem ziemianki)
+    if (map.walkable(hh.x, hh.z) && !map.covered(hh.x, hh.z)) { P.surface = false; audio.play('dirt', hh.clone().setY(map.floorAt(hh.x, hh.z)), 0.8, 0.8, 2); for (const h of hands) pulse(h, 0.6, 60); }
+    else rig.position.y += (map.surfaceAt(hh.x, hh.z) - FLOOR + base - rig.position.y) * Math.min(1, dt * 8);
+  }
+  if (!P.climb && !P.surface && map.walkable(hh.x, hh.z)) rig.position.y += (map.floorAt(hh.x, hh.z) - FLOOR + base - rig.position.y) * Math.min(1, dt * 8);
   rig.updateMatrixWorld(true);
   updatePlayerProxy();
   const running = !state.paused && (state.phase === 'prep' || state.phase === 'wave' || state.phase === 'between');
@@ -1078,5 +1150,5 @@ async function startXR() {
 })();
 camera.position.set(0, EYE_T - FLOOR, 0);
 
-window.__trench = { smoke, art, artToggle, artFire, callWave, pullToHand, deskPull, redDot, vm, set ads(v) { ads = v; }, simStep, map, troops, items, guns, P, state, startGame, nextWave, camera, rig, scene, THREE, hands, fireGun, shootRay, ars, look, keys, updateDesktop, menuAction, get desk() { return desk; }, set desk(v) { desk = v; }, deskReload, deskInteract, deskThrow, set mounted(v) { mounted = v; }, get mounted() { return mounted; } };
+window.__trench = { startClimb, deskClimb, tryMove, smoke, art, artToggle, artFire, callWave, pullToHand, deskPull, redDot, vm, set ads(v) { ads = v; }, simStep, map, troops, items, guns, P, state, startGame, nextWave, camera, rig, scene, THREE, hands, fireGun, shootRay, ars, look, keys, updateDesktop, menuAction, get desk() { return desk; }, set desk(v) { desk = v; }, deskReload, deskInteract, deskThrow, set mounted(v) { mounted = v; }, get mounted() { return mounted; } };
 void MAG;
