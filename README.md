@@ -461,14 +461,22 @@ Widok 1:1 (VR albo komputer). Stoisz w linii okopów z drużyną 8 obrońców. Z
 skokami, przyklękają za osłoną i strzelają, a z bliska rzucają granaty. Każda fala jest większa (8 + 5 × numer fali).
 Kto dobiegnie, wskakuje do okopu i ściga obrońców po **labiryncie** łączników, ślepych zaułków i okopu wspierającego
 (znajduje drogę A*). Między falami masz 25 s na uzupełnienie amunicji; po każdej fali przychodzi najwyżej 3 obrońców
-w posiłkach.
+w posiłkach. Falę możesz też **wezwać sam** w każdej chwili (menu → „Wezwij falę teraz”, na komputerze `N`), nawet gdy
+poprzednia trwa; przełącznik „Fale: automatyczne / na żądanie” wyłącza samoczynne nadchodzenie fal.
+
+Część atakujących niesie **granaty dymne**: z 30–95 m od okopu rzucają je przed siebie i biegną za zasłoną. Dym
+(chmura ok. 15 m, ~40 s, znosi go wiatr) zasłania widok Tobie i obrońcom, a wrogom za nim — Ciebie.
+
+**Wsparcie artylerii** (raz na minutę): wskaż cel na przedpolu, a po ~2 s spada salwa 9 pocisków w promieniu 9 m
+(świst nadlatujących pocisków, potężne wybuchy). Celu nie da się wskazać tuż przed własnym okopem.
 
 **Okop:** stanowiska strzeleckie przy przedpiersiu z workami — stojąc, widzisz i strzelasz ponad workami, a gdy
 **kucniesz**, chowasz się (wróg widzi tylko to, co wystaje). Łączniki i okop wspierający są głębsze — głowa jest
 poniżej gruntu. Wysokość dopasowuje się sama do Twojego wzrostu po wejściu w VR (w menu: „Dopasuj wzrost”).
 
 **Broń:**
-- karabin automatyczny (30 naboi, kolimator, licznik naboi na boku),
+- karabin automatyczny (30 naboi, licznik naboi na boku) z **kolimatorem**: czerwona kropka w pierścieniu jest widoczna
+  tylko, gdy patrzysz przez okienko wzdłuż lufy — i wtedy wskazuje dokładnie miejsce trafienia,
 - pistolet (12 naboi),
 - granaty (zapalnik 3,6 s),
 - nóż (trafienie ostrzem w ruchu),
@@ -481,11 +489,16 @@ zapasu). Poległym (swoim i wrogom) można zabrać magazynki i granaty. Obrońcy
 wystrzelają, idą do arsenału, a gdy ten jest pusty — szukają amunicji przy poległych.
 
 **Sterowanie VR (wszystko fizycznie):**
-- **chwyt (grip)** przy prawym biodrze — pistolet; za prawym ramieniem — karabin; na lewej piersi — nóż;
+- **chwyt (grip)** przy prawym biodrze (z tyłu) — pistolet; za prawym ramieniem — karabin; wysoko na lewej piersi — nóż;
   puszczona broń wraca na swoje miejsce;
-- **chwyt przy pasie z przodu** — magazynek z lewej ładownicy (pistoletowe na lewym biodrze), granat z prawej;
+- **chwyt przy pasie z przodu** — magazynek karabinu z lewej ładownicy, granat z prawej; magazynki pistoletu na lewym
+  boku. Łapie zawsze najbliższy slot, a slot pod wolną dłonią podświetla się kolorową kulką i lekko drga;
+- **pusta ręka + spust** — wskazany kontrolerem najbliższy przedmiot (magazynek, granat — także cudzy, uzbrojony,
+  do odrzucenia — łup z poległego albo zapas ze skrzyni arsenału, do 15 m) **przylatuje do dłoni**;
+- **wciśnięcie gałki** (dowolnej) — artyleria: promień z kontrolera i okrąg celu na ziemi (zielony = można strzelać),
+  spust tej ręki = ogień, ponowne wciśnięcie gałki = anuluj;
 - **spust** — strzał (karabin seriami, pistolet pojedynczo); z granatem w dłoni spust wyciąga zawleczkę,
-  puszczenie chwytu = rzut (siła z ruchu ręki);
+  puszczenie chwytu = rzut (siła z najszybszej chwili ruchu ręki, wzmocniona — granat leci kilkadziesiąt metrów);
 - **A / X** — wyrzuć magazynek z broni w tej dłoni; nowy magazynek **przyłóż do gniazda** broni (pod spodem),
   a sam wskoczy na miejsce;
 - puszczony **przy ładownicy** magazynek albo granat trafia do kieszeni (jeśli jest miejsce, pusty magazynek nie);
@@ -500,7 +513,8 @@ sekundach bez trafień. Kule przelatujące obok świszczą.
 
 **Na komputerze:** klik — przechwyć mysz, `WASD` (`Shift` bieg), `C` — kucnij, LPM — strzał, PPM — celowanie przez
 przyrządy, `1`–`4` — karabin/pistolet/granat/nóż, `R` — przeładuj z kieszeni, `G` — granat, `E` — minigun (wejdź/zejdź)
-albo uzupełnij w arsenale / zabierz poległemu / podnieś, `Enter` — start/pauza, `O` — menu.
+albo uzupełnij w arsenale / zabierz poległemu / podnieś, `F` — przyciągnij wskazany przedmiot (trafia do kieszeni),
+`T` — artyleria (cel celownikiem, LPM — ogień), `N` — wezwij falę, `Enter` — start/pauza, `O` — menu.
 
 ## Parametry URL
 - `?seed=42`: inny losowy teren (las, kolory, ukształtowanie).
@@ -539,7 +553,7 @@ albo uzupełnij w arsenale / zabierz poległemu / podnieś, `Enter` — start/pa
   - Tunel ze światłem.
   - Miejsce sądu z wagą, niebo i piekło (`judgement.js`).
   - Dźwięki proceduralne i przebieg sceny.
-- `src/trench/world.js`, `src/trench/soldiers.js`, `src/trench/gear.js`, `src/trench/audio.js`, `src/trench/main.js`: tryb Obrona okopów.
+- `src/trench/world.js`, `src/trench/soldiers.js`, `src/trench/gear.js`, `src/trench/smoke.js` (zasłony dymne), `src/trench/audio.js`, `src/trench/main.js`: tryb Obrona okopów.
   - Mapa okopów na siatce 1 m (stanowiska, łączniki, ziemianka), teren z lejami i drutem, linia wzroku i A*.
   - Żołnierze z części instancjonowanych, AI natarcia, walki w okopie i zaopatrzenia.
   - Broń, magazynki, granaty z fizyką, miniguny z przegrzewaniem, efekty.

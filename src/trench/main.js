@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import { CanvasPanel } from '../hud.js';
 import { TrenchMap, FLOOR, DUG_FLOOR } from './world.js';
-import { Troops, MAG } from './soldiers.js';
+import { Troops, MAG, TRACER_V } from './soldiers.js';
+import { Smoke } from './smoke.js';
 import { GUNS, POUCH_CAP, rifleMesh, pistolMesh, knifeMesh, magMesh, grenadeMesh, Items, Minigun, Fx } from './gear.js';
 import { TrenchAudio } from './audio.js';
 
@@ -52,6 +53,8 @@ const items = new Items(map, scene);
 const fx = new Fx(scene);
 const audio = new TrenchAudio(camera, scene);
 const guns = map.mgPos.map((p) => new Minigun(p, scene));
+const smoke = new Smoke(scene, map);
+troops.smoke = smoke;
 // skrzynki pod posterunkami (stopień strzelecki)
 {
   const m = new THREE.InstancedMesh(new THREE.BoxGeometry(0.55, 0.16, 0.38).translate(0, 0.08, 0), new THREE.MeshLambertMaterial({ color: 0x5a4632 }), map.posts.length);
@@ -92,13 +95,13 @@ const P = { isPlayer: true, side: 0, alive: true, hp: 100, regenT: 0, x: 0, z: 0
   pouch: { rifle: [30, 30, 30, 30], pistol: [12, 12], grenade: 2 } };
 for (const k of ['rifle', 'pistol', 'knife']) scene.add(P[k].mesh);
 let base = FLOOR, bodyYaw = 0, crouch = false;
-const state = { phase: 'idle', wave: 0, timer: 0, paused: false, msg: '', msgT: 0, msgCol: '#ffe8b0', hurt: 0, dead: 0 };
+const state = { phase: 'idle', wave: 0, timer: 0, auto: true, paused: false, msg: '', msgT: 0, msgCol: '#ffe8b0', hurt: 0, dead: 0 };
 function placeRig(x, z) { rig.position.set(x, map.floorAt(x, z) - FLOOR + base, z); }
 placeRig(map.spawnPoint.x, map.spawnPoint.y + 0.3);
 
 // ---------- panele ----------
 class Wrist extends CanvasPanel {
-  constructor() { super(520, 350, 0.14); }
+  constructor() { super(520, 390, 0.14); }
   draw(s) {
     const key = JSON.stringify(s); if (key === this.last) return; this.last = key;
     const c = this.ctx, W = this.canvas.width;
@@ -113,8 +116,9 @@ class Wrist extends CanvasPanel {
     c.fillText(`Granaty: ${s.g}   ·   Obrońcy: ${s.allies}`, 24, 192);
     c.fillStyle = '#c8b890'; c.font = '22px system-ui';
     c.fillText(`Arsenał: ${s.ar} mag. kar. · ${s.ap} mag. pist. · ${s.ag} gran.`, 24, 228);
-    c.fillStyle = s.subCol || '#ffd890'; c.font = 'bold 24px system-ui'; c.fillText(s.sub, 24, 272);
-    c.fillStyle = '#b8b0a0'; c.font = '19px system-ui'; c.fillText(s.hint, 24, 318);
+    c.fillStyle = s.artReady ? '#9fe8b0' : '#c8a080'; c.font = 'bold 22px system-ui'; c.fillText(s.art, 24, 264);
+    c.fillStyle = s.subCol || '#ffd890'; c.font = 'bold 24px system-ui'; c.fillText(s.sub, 24, 306);
+    c.fillStyle = '#b8b0a0'; c.font = '19px system-ui'; c.fillText(s.hint, 24, 352);
     this.tex.needsUpdate = true;
   }
 }
@@ -131,7 +135,7 @@ class Banner extends CanvasPanel {
   }
 }
 class Menu extends CanvasPanel {
-  constructor() { super(720, 640, 0.6); this.buttons = []; this.hover = -1; this.mesh.visible = false; this.mesh.material.depthTest = false; this.mesh.renderOrder = 9500; }
+  constructor() { super(720, 790, 0.6); this.buttons = []; this.hover = -1; this.mesh.visible = false; this.mesh.material.depthTest = false; this.mesh.renderOrder = 9500; }
   hit(px, py) { return this.buttons.findIndex((b) => px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h); }
   draw(o) {
     const key = JSON.stringify([o, this.hover]); if (key === this.last) return; this.last = key;
@@ -141,10 +145,11 @@ class Menu extends CanvasPanel {
     let y = 84;
     btn(30, y, 660, 64, o.phase === 'idle' || o.phase === 'dead' ? '▶ START (nowa gra)' : o.paused ? '▶ Wznów' : '❚❚ Pauza', 'run', '#3a6a2a'); y += 78;
     btn(30, y, 320, 60, 'Od nowa', 'restart', '#6a2a22'); btn(370, y, 320, 60, 'Dopasuj wzrost', 'calib', '#5a4a1a'); y += 74;
+    btn(30, y, 320, 60, '⚑ Wezwij falę teraz', 'wave', '#7a4a12'); btn(370, y, 320, 60, o.auto ? 'Fale: automatyczne' : 'Fale: na żądanie', 'auto', '#4a3a5a'); y += 74;
     btn(30, y, 210, 56, 'Artyleria', 'mode:index.html', '#2a3a5a'); btn(255, y, 210, 56, 'Bitwa średniow.', 'mode:medieval.html', '#2a3a5a'); btn(480, y, 210, 56, 'Kostucha', 'mode:reaper.html', '#2a3a5a'); y += 70;
     btn(30, y, 660, 56, 'Zamknij menu', 'close'); y += 80;
     c.font = '21px system-ui'; c.fillStyle = '#f4ead8';
-    ['Chwyt (grip): weź broń z kabury / magazynek z kieszeni / z arsenału.', 'Spust: strzał · granat: spust = zawleczka, puść chwyt = rzut.', 'A / X: wyrzuć magazynek · włóż nowy, przykładając go do broni.', 'Puść magazynek przy kieszeni na pasie — schowasz go.', 'Minigun: chwyć uchwyty z tyłu, spust = ogień, uważaj na temperaturę.', 'Kucnij, by schować się za workami. Lewa gałka: chód, prawa: obrót.'].forEach((l, i) => c.fillText(l, 30, y + i * 30));
+    ['Chwyt (grip): weź broń z kabury / magazynek z kieszeni / z arsenału.', 'Spust: strzał · granat: spust = zawleczka, puść chwyt = rzut.', 'A / X: wyrzuć magazynek · włóż nowy, przykładając go do broni.', 'Puść magazynek przy kieszeni na pasie — schowasz go.', 'Pusta ręka + spust: najbliższy przedmiot (wskazany) leci do dłoni.', 'Wciśnij gałkę: artyleria — wskaż cel, spust = ogień.', 'Minigun: chwyć uchwyty z tyłu, spust = ogień, uważaj na temperaturę.', 'Kucnij, by schować się za workami. Lewa gałka: chód, prawa: obrót.'].forEach((l, i) => c.fillText(l, 30, y + i * 30));
     this.tex.needsUpdate = true;
   }
 }
@@ -190,11 +195,16 @@ const hands = [0, 1].map((i) => {
   rig.add(c, grip);
   const ray = new THREE.Line(rayGeo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 }));
   ray.scale.z = 2; ray.visible = false; c.add(ray);
-  const h = { i, c, grip, ray, source: null, hand: null, held: null, trigger: false, squeeze: false, prev: [], pos: V(), last: V(), vel: V(), q: new THREE.Quaternion(), support: false, mg: null };
+  const h = { i, c, grip, ray, source: null, hand: null, held: null, trigger: false, squeeze: false, prev: [], pos: V(), last: V(), vel: V(), hist: [], q: new THREE.Quaternion(), support: false, mg: null, blockFire: false, zone: null };
   c.addEventListener('connected', (e) => { h.source = e.data; h.hand = e.data.handedness; if (h.hand === 'left') grip.add(wrist.mesh); });
   c.addEventListener('disconnected', () => { h.source = null; });
-  c.addEventListener('selectstart', () => { audio.resume(); h.trigger = true; if (menu.mesh.visible && h.hand === 'right') { if (menu.hover >= 0) menuAction(menu.buttons[menu.hover].act); return; } triggerDown(h); });
-  c.addEventListener('selectend', () => { h.trigger = false; });
+  c.addEventListener('selectstart', () => {
+    audio.resume(); h.trigger = true;
+    if (menu.mesh.visible && h.hand === 'right') { h.blockFire = true; if (menu.hover >= 0) menuAction(menu.buttons[menu.hover].act); return; }
+    if (art.aim === h) { h.blockFire = true; artFire(); return; }
+    triggerDown(h);
+  });
+  c.addEventListener('selectend', () => { h.trigger = false; h.blockFire = false; });
   c.addEventListener('squeezestart', () => { audio.resume(); h.squeeze = true; grab(h); });
   c.addEventListener('squeezeend', () => { h.squeeze = false; release(h); });
   return h;
@@ -204,12 +214,29 @@ const other = (h) => hands[1 - h.i];
 function pulse(h, v, ms) { const a = h.source?.gamepad?.hapticActuators?.[0]; if (a) a.pulse(v, ms); }
 
 // ---------- sloty na ciele (względem głowy i kierunku tułowia) ----------
+// rozstaw: broń wysoko z tyłu / prawe biodro z tyłu, nóż wysoko na lewej piersi,
+// magazynki karabinu z przodu pasa po lewej, pistoletowe na lewym boku, granaty z przodu po prawej
 const SLOTS = {
-  rifle: new THREE.Vector3(0.2, -0.28, 0.16), pistol: new THREE.Vector3(0.22, -0.8, 0.0), knife: new THREE.Vector3(-0.14, -0.4, -0.12),
-  'pouch-rifle': new THREE.Vector3(-0.12, -0.66, -0.17), 'pouch-pistol': new THREE.Vector3(-0.25, -0.72, -0.04), 'pouch-grenade': new THREE.Vector3(0.12, -0.66, -0.17),
+  rifle: new THREE.Vector3(0.2, -0.22, 0.2), pistol: new THREE.Vector3(0.27, -0.84, 0.06), knife: new THREE.Vector3(-0.15, -0.3, -0.13),
+  'pouch-rifle': new THREE.Vector3(-0.12, -0.68, -0.2), 'pouch-pistol': new THREE.Vector3(-0.31, -0.74, 0.0), 'pouch-grenade': new THREE.Vector3(0.2, -0.66, -0.15),
 };
+const SLOT_R = { rifle: 0.2, pistol: 0.13, knife: 0.11, 'pouch-rifle': 0.14, 'pouch-pistol': 0.12, 'pouch-grenade': 0.12 };
+const SLOT_COL = { rifle: 0xa0d0ff, pistol: 0xa0d0ff, knife: 0xe0e0e0, 'pouch-rifle': 0x90ff90, 'pouch-pistol': 0x60e0c0, 'pouch-grenade': 0xffb060 };
 const bodyQ = new THREE.Quaternion();
 function slotPos(name, out = V()) { const h = camera.getWorldPosition(V()); return out.copy(SLOTS[name]).applyQuaternion(bodyQ).add(h); }
+// slot, do którego dłoń jest najbliżej (względem promienia slotu) — bez przypadkowego łapania sąsiada
+function slotAt(h) {
+  const o = other(h);
+  let best = null, bs = 1;
+  for (const n of Object.keys(SLOTS)) {
+    if ((n === 'rifle' || n === 'pistol' || n === 'knife') && o.held?.kind === n) continue;
+    const sc = slotPos(n).distanceTo(h.pos) / SLOT_R[n];
+    if (sc < bs) { bs = sc; best = n; }
+  }
+  return best;
+}
+// podświetlenie slotu pod dłonią
+const zoneMarks = [0, 1].map(() => { const m = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, depthWrite: false, toneMapped: false })); m.visible = false; m.renderOrder = 50; scene.add(m); return m; });
 // kieszenie: widoczne ładownice z wystającymi magazynkami
 const pouches = {};
 for (const type of ['rifle', 'pistol', 'grenade']) {
@@ -235,11 +262,11 @@ function grab(h) {
   // druga ręka na łożu karabinu
   const o = other(h);
   if (o.held?.kind === 'rifle' && GUNS.rifle.fore.clone().applyMatrix4(P.rifle.mesh.matrixWorld).distanceTo(hp) < 0.13) { h.support = true; pulse(h, 0.3, 30); return; }
-  // sloty: broń
-  const near = (n, r = 0.17) => slotPos(n).distanceTo(hp) < r;
-  for (const gun of ['rifle', 'pistol', 'knife']) if (near(gun, gun === 'rifle' ? 0.24 : 0.17) && o.held?.kind !== gun) { h.held = { kind: gun }; audio.ui('click', 0.4); pulse(h, 0.4, 40); return; }
-  // kieszenie
-  for (const type of ['rifle', 'pistol', 'grenade']) if (near('pouch-' + type, 0.15)) {
+  // sloty: najbliższy (broń albo kieszeń)
+  const slot = slotAt(h);
+  if (slot === 'rifle' || slot === 'pistol' || slot === 'knife') { h.held = { kind: slot }; audio.ui('click', 0.4); pulse(h, 0.4, 40); return; }
+  if (slot) {
+    const type = slot.slice(6);
     if (type === 'grenade') { if (P.pouch.grenade > 0) { P.pouch.grenade--; holdItem(h, items.add('grenade', null, hp, null)); } else msg('Brak granatów — arsenał w ziemiance', '#ffb090'); }
     else { const arr = P.pouch[type]; if (arr.length) { arr.sort((a, b) => b - a); holdItem(h, items.add('mag', type, hp, null, { rounds: arr.shift() })); } else msg('Kieszeń pusta — weź magazynki z arsenału albo od poległych', '#ffb090'); }
     return;
@@ -256,21 +283,24 @@ function grab(h) {
   }
   // ciało poległego
   const body = lootBody(hp, 0.5);
-  if (body) {
-    if (body.loot.mags > 0) { body.loot.mags--; holdItem(h, items.add('mag', 'rifle', hp, null, { rounds: body.side ? Math.round(rnd(12, 30)) : 30 })); }
-    else if (body.loot.grenades > 0) { body.loot.grenades--; holdItem(h, items.add('grenade', null, hp, null)); }
-  }
+  if (body) { const it = takeFromBody(body, hp); if (it) holdItem(h, it); }
 }
+function takeFromBody(body, p) {
+  if (body.loot.mags > 0) { body.loot.mags--; return items.add('mag', 'rifle', p, null, { rounds: body.side ? Math.round(rnd(12, 30)) : 30 }); }
+  if (body.loot.grenades > 0) { body.loot.grenades--; return items.add('grenade', null, p, null); }
+  return null;
+}
+function bodyCenter(s, out = V()) { return out.set(s.x + s.fall.x * 0.6, s.y + 0.2, s.z + s.fall.z * 0.6); }
 function lootBody(p, r) {
   let best = null, bd = r;
   for (const s of troops.soldiers) {
     if (s.state !== 'dead' || !s.loot || (s.loot.mags <= 0 && s.loot.grenades <= 0)) continue;
-    const c = new THREE.Vector3(s.x + s.fall.x * 0.6, s.y + 0.2, s.z + s.fall.z * 0.6), d = c.distanceTo(p);
+    const c = bodyCenter(s), d = c.distanceTo(p);
     if (d < bd) { bd = d; best = s; }
   }
   return best;
 }
-function holdItem(h, it) { it.held = h; it.rest = false; h.held = { kind: 'item', item: it }; it.drop = null; pulse(h, 0.35, 30); audio.ui('click', 0.3, 0.8); }
+function holdItem(h, it) { it.held = h; it.pull = null; it.rest = false; h.held = { kind: 'item', item: it }; it.drop = null; pulse(h, 0.35, 30); audio.ui('click', 0.3, 0.8); }
 function release(h) {
   if (h.mg) { h.mg = null; return; }
   if (h.support) { h.support = false; return; }
@@ -286,13 +316,16 @@ function release(h) {
     else if (P.pouch[it.type].length < POUCH_CAP[it.type]) { P.pouch[it.type].push(it.rounds); items.remove(it); audio.ui('magin', 0.4, 0.8); return; }
     else msg('Kieszeń pełna', '#ffb090');
   }
-  // rzut / upuszczenie z prędkością dłoni
-  it.vel.copy(h.vel).multiplyScalar(it.kind === 'grenade' ? 1.25 : 1);
+  // rzut / upuszczenie z prędkością dłoni (szczyt z ostatnich ~0,1 s — puszczenie chwytu zwykle spóźnia się za ruchem)
+  const peak = h.hist.reduce((a, v) => (v.lengthSq() > a.lengthSq() ? v : a), h.vel);
+  if (it.kind === 'grenade') { it.vel.copy(peak).multiplyScalar(2.1); if (peak.length() > 2.5) it.vel.y += 1.5; if (it.vel.length() > 34) it.vel.setLength(34); }
+  else it.vel.copy(peak);
   if (it.kind === 'grenade' && it.armed) { it.byPlayer = true; it.fuse = Math.min(it.fuse, 3.6); }
 }
 function triggerDown(h) {
   if (!P.alive) return;
   const H = h.held;
+  if (!H && !h.mg && !h.support) { pullToHand(h); return; }
   if (H?.kind === 'pistol') firePistol(h);
   if (H?.kind === 'item' && H.item.kind === 'grenade' && !H.item.armed) { H.item.armed = true; H.item.fuse = 3.6 + 1.2; H.item.mesh.userData.ring.visible = false; audio.ui('pin', 0.7); pulse(h, 0.5, 40); }
 }
@@ -314,15 +347,16 @@ function shootRay(o, d, dmg, head) {
   return o.clone().addScaledVector(d, 450);
 }
 let shotN = 0;
-function fireGun(kind, muzzle, dir, h) {
+function fireGun(kind, muzzle, dir, h, origin = muzzle) {
   const g = P[kind], G = GUNS[kind];
   if (!g.mag || g.mag.rounds <= 0) { audio.ui('click', 0.6); g.cd = 0.25; return; }
   g.mag.rounds--; g.cd = 1 / G.rate; g.kick = Math.min(0.1, g.kick + G.recoil);
   const d = dir.clone().add(V().set(rnd(-1, 1), rnd(-1, 1), rnd(-1, 1)).multiplyScalar(G.spread)).normalize();
-  const end = shootRay(muzzle, d, G.dmg, G.head);
+  const end = shootRay(origin, d, G.dmg, G.head);
   fx.flash(muzzle, kind === 'rifle' ? 0.22 : 0.16);
   audio.play(G.sound, muzzle, 0.9, 1, 3);
-  if (++shotN % 3 === 0) troops.tracers.push({ a: muzzle.clone(), b: end, t: 0, T: muzzle.distanceTo(end) / 700, side: 0 });
+  troops.tracers.push({ a: muzzle.clone(), b: end, t: 0, T: muzzle.distanceTo(end) / TRACER_V, side: 0, player: true, len: 5 });
+  shotN++;
   if (h) pulse(h, kind === 'rifle' ? 0.55 : 0.75, kind === 'rifle' ? 35 : 55);
   P.shotT = 0;
 }
@@ -390,21 +424,31 @@ troops.onThrow = (s, target) => {
   if (from.distanceTo(P.head) < 30) msg('GRANAT!', '#ff7a5a', 1.5);
 };
 items.onBounce = (it) => audio.play('click', it.pos, 0.5, 0.6, 1);
-items.onExplode = (p, it) => {
-  fx.explosion(p); audio.play('boom', p, 1.4, 1, 8);
+items.onExplode = (p, it) => explodeAt(p, 7, it.byPlayer, 1);
+function explodeAt(p, R, byPlayer, S) {
+  fx.explosion(p, S); audio.play('boom', p, 1.4 * Math.sqrt(S), S > 1 ? 0.8 : 1, 8 * S);
   const before = troops.soldiers.filter((s) => s.state === 'alive' && s.side === 1).length;
-  troops.explode(p, 7, it.byPlayer ? P : null);
-  if (it.byPlayer) { const k = before - troops.soldiers.filter((s) => s.state === 'alive' && s.side === 1).length; if (k > 0) { P.kills += k; hitFx(true); } }
+  troops.explode(p, R, byPlayer ? P : null);
+  if (byPlayer) { const k = before - troops.soldiers.filter((s) => s.state === 'alive' && s.side === 1).length; if (k > 0) { P.kills += k; hitFx(true); } }
   const d = p.distanceTo(P.chest);
-  if (d < 7 && (map.los(p.clone().add(V().set(0, 0.3, 0)), P.head, 0.2) || map.los(p.clone().add(V().set(0, 0.3, 0)), P.chest, 0.2) || d < 1.6)) hurt(130 * (1 - d / 7) ** 1.3, 'boom');
-  if (d < 25) state.shake = Math.max(state.shake || 0, 0.6 * (1 - d / 25));
+  if (d < R && (map.los(p.clone().add(V().set(0, 0.3, 0)), P.head, 0.2) || map.los(p.clone().add(V().set(0, 0.3, 0)), P.chest, 0.2) || d < 1.6)) hurt(130 * (1 - d / R) ** 1.3, 'boom');
+  const sr = 25 * S;
+  if (d < sr) { state.shake = Math.max(state.shake || 0, 0.6 * (1 - d / sr)); for (const h of hands) pulse(h, 0.6 * (1 - d / sr), 80); }
+}
+// zasłony dymne wroga
+troops.onSmoke = (s, target) => {
+  smoke.throw(troops.eyePos(s, V()).add(V().set(0, 0.2, 0)), target);
+  if (Math.hypot(s.x - P.x, s.z - P.z) < 110 && Math.random() < 0.6) msg('Wróg stawia zasłonę dymną!', '#d8d8c8', 2);
 };
+smoke.onLand = (p) => audio.play('steam', p, 1.1, 0.55, 6);
 
 // ---------- przebieg gry ----------
 function clearAll() {
   troops.clear();
   for (const it of [...items.list]) items.remove(it);
   for (const g of guns) { g.heat = 0; g.over = false; }
+  smoke.clear();
+  art.shells = []; art.aim = null; art.cd = 0; art.markT = 0;
 }
 function startGame() {
   clearAll();
@@ -418,7 +462,7 @@ function startGame() {
   if (!renderer.xr.isPresenting) { look.yaw = 0; look.pitch = 0; }
   else { hands[0].held = null; hands[1].held = null; const r = hands.find((h) => h.hand === 'right'); if (r) r.held = { kind: 'rifle' }; }
   menu.mesh.visible = false;
-  msg('Zajmij stanowisko. Pierwsza fala za 20 s', '#ffe8b0', 4);
+  msg(state.auto ? 'Zajmij stanowisko. Pierwsza fala za 20 s' : 'Zajmij stanowisko. Falę wzywasz z menu (Y/B)', '#ffe8b0', 4);
 }
 function topUpAllies() {
   const alive = troops.alive(0);
@@ -444,12 +488,12 @@ function nextWave() {
 function updateGame(dt) {
   if (state.msgT > 0) state.msgT -= dt;
   if (state.phase === 'prep' || state.phase === 'between') {
-    state.timer -= dt;
+    if (state.auto) state.timer -= dt;
     if (state.timer <= 0) nextWave();
   } else if (state.phase === 'wave') {
     if (!troops.soldiers.some((s) => s.side === 1 && s.state === 'alive')) {
       state.phase = 'between'; state.timer = 25;
-      msg(`Fala ${state.wave} odparta! Uzupełnij amunicję (arsenał w ziemiance)`, '#9fe8b0', 5);
+      msg(state.auto ? `Fala ${state.wave} odparta! Uzupełnij amunicję (arsenał w ziemiance)` : `Fala ${state.wave} odparta! Następną wezwij z menu`, '#9fe8b0', 5);
     }
   } else if (state.phase === 'dead') state.dead += dt;
   // regeneracja
@@ -461,9 +505,16 @@ function menuAction(act) {
   if (k === 'run') { if (state.phase === 'idle' || state.phase === 'dead') startGame(); else state.paused = !state.paused; if (!state.paused) menu.mesh.visible = false; }
   else if (k === 'restart') startGame();
   else if (k === 'calib') calibrate();
+  else if (k === 'wave') { callWave(); menu.mesh.visible = false; state.paused = false; }
+  else if (k === 'auto') { state.auto = !state.auto; if (state.auto && (state.phase === 'prep' || state.phase === 'between')) state.timer = Math.min(state.timer, 15); msg(state.auto ? 'Fale nadchodzą same' : 'Fale tylko na żądanie (menu → Wezwij falę)', '#ffe8b0', 2.5); }
   else if (k === 'close') { menu.mesh.visible = false; if (renderer.xr.isPresenting) state.paused = false; }
   else if (k === 'mode') location.href = a;
   menu.last = '';
+}
+function callWave() {
+  if (state.phase === 'idle' || state.phase === 'dead') { startGame(); }
+  if (troops.alive(1).length > 80) { msg('Za dużo wrogów na polu — najpierw ich przerzedź', '#ffb090', 2.5); return; }
+  nextWave();
 }
 function toggleMenu() {
   const show = !menu.mesh.visible;
@@ -513,11 +564,13 @@ function pollXR(dt) {
         tryMove(v.x, v.z); P.speed = 2.3;
       }
       if (down(5)) toggleMenu();
+      if (down(3)) artToggle(h);
       if (down(4) && h.held && P[h.held.kind]?.mag !== undefined) eject(h.held.kind, h);
     } else {
       if (Math.abs(ax) > 0.75 && !h.flick) { h.flick = true; snapTurn(ax > 0 ? -Math.PI / 6 : Math.PI / 6); }
       if (Math.abs(ax) < 0.35) h.flick = false;
       if (down(5)) toggleMenu();
+      if (down(3)) artToggle(h);
       if (down(4)) { if (state.phase === 'idle' || state.phase === 'dead') startGame(); else if (h.held && P[h.held.kind]?.mag !== undefined) eject(h.held.kind, h); }
     }
     h.prev = pr;
@@ -537,6 +590,7 @@ renderer.domElement.addEventListener('mousedown', (e) => {
   if (document.pointerLockElement !== renderer.domElement) return;
   if (e.button === 2) { ads = true; return; }
   if (e.button !== 0 || !P.alive) return;
+  if (art.aim === 'desk') { artFire(); return; }
   mouseDown = true;
   if (mounted) return;
   if (desk === 'pistol') deskFire('pistol');
@@ -556,6 +610,9 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyG') deskThrow();
   if (e.code === 'KeyC') crouch = !crouch;
   if (e.code === 'KeyE') deskInteract();
+  if (e.code === 'KeyF') deskPull();
+  if (e.code === 'KeyT') artToggle('desk');
+  if (e.code === 'KeyN') callWave();
   if (e.code === 'Enter') { if (state.phase === 'idle' || state.phase === 'dead') startGame(); else state.paused = !state.paused; }
   if (e.code === 'KeyO' || e.code === 'Escape') { document.getElementById('menu').style.display = document.getElementById('menu').style.display === 'block' ? 'none' : 'block'; }
 });
@@ -564,9 +621,9 @@ function deskDir() { return V().set(0, 0, -1).applyQuaternion(camera.getWorldQua
 function deskFire(kind) {
   const g = P[kind]; if (g.cd > 0) return;
   const o = camera.getWorldPosition(V()), d = deskDir();
-  fireGun(kind, o.clone().addScaledVector(d, 0.5).add(V().set(0, -0.08, 0)), d, null);
-  // trafienie liczone od oka (celownik na środku ekranu)
-  void o;
+  // trafienie liczone od oka (dokładnie tam, gdzie celownik), smuga i błysk od lufy
+  const mz = vm[kind].visible ? GUNS[kind].muzzle.clone().applyMatrix4(vm[kind].matrixWorld) : o.clone().addScaledVector(d, 0.5).add(V().set(0, -0.08, 0));
+  fireGun(kind, mz, d, null, o);
 }
 function deskStab() {
   const o = camera.getWorldPosition(V()), d = deskDir();
@@ -579,7 +636,7 @@ function deskThrow() {
   if (P.pouch.grenade <= 0) { msg('Brak granatów', '#ffb090'); return; }
   P.pouch.grenade--;
   const o = camera.getWorldPosition(V()), d = deskDir();
-  const it = items.add('grenade', null, o.clone().addScaledVector(d, 0.4), d.multiplyScalar(14).add(V().set(0, 3, 0)), { armed: true, fuse: 3.4 });
+  const it = items.add('grenade', null, o.clone().addScaledVector(d, 0.4), d.multiplyScalar(21).add(V().set(0, 4, 0)), { armed: true, fuse: 3.6 });
   it.byPlayer = true; audio.ui('pin', 0.6);
 }
 function deskReload() {
@@ -650,7 +707,165 @@ function updateDesktop(dt) {
   if (desk === 'knife') { const st = vm.knife.userData.stab || 0; vm.knife.userData.stab = Math.max(0, st - dt); m.position.z -= Math.sin((st / 0.25) * Math.PI) * 0.25; }
   if (g?.reloadT > 0) m.rotation.x -= 0.6;
   if (vm[desk].userData.counter) vm[desk].userData.counter.userData.draw(g.mag ? g.mag.rounds : null, GUNS[desk].mag);
-  document.getElementById('cross').style.display = ads || mounted ? 'none' : 'block';
+  document.getElementById('cross').style.display = (ads && desk === 'rifle') || mounted ? 'none' : 'block';
+}
+
+
+// ---------- przyciąganie przedmiotów (pusta ręka + spust) ----------
+const PULL_R = 15;
+function pullCandidate(o, dir) {
+  let best = null, bs = Infinity;
+  const consider = (p, make) => {
+    const v = p.clone().sub(o), d = v.length();
+    if (d > PULL_R || d < 0.05) return;
+    const c = v.divideScalar(d).dot(dir);
+    if (c < -0.1 && d > 1.5) return;                      // za plecami — tylko to, co tuż obok
+    const sc = d * (1 + (1 - c) * 2.5);
+    if (sc >= bs) return;
+    if (d > 0.8 && !map.los(o, p.clone().add(V().set(0, 0.1, 0)), 0.2)) return;
+    bs = sc; best = { p, make };
+  };
+  for (const it of items.list) if (!it.held && !it.pull) consider(it.pos.clone(), () => it);
+  for (const s of troops.soldiers) if (s.state === 'dead' && s.loot && (s.loot.mags > 0 || s.loot.grenades > 0)) { const c = bodyCenter(s); consider(c, () => takeFromBody(s, c)); }
+  for (const c of crates) if (ars[c.type] > 0) consider(c.center.clone().add(V().set(0, 0.2, 0)), () => { ars[c.type]--; drawCrates(); return c.type === 'grenade' ? items.add('grenade', null, c.center.clone().add(V().set(0, 0.45, 0)), null) : items.add('mag', c.type, c.center.clone().add(V().set(0, 0.45, 0)), null); });
+  return best;
+}
+function startPull(it, to) {
+  it.pull = to; it.pullT = 0; it.rest = false;
+  audio.play('woosh', it.pos, 0.5, 1.2, 1);
+}
+function pullToHand(h) {
+  const dir = V().set(0, 0, -1).applyQuaternion(h.q);
+  const c = pullCandidate(h.pos, dir);
+  if (!c) { pulse(h, 0.15, 20); return; }
+  const it = c.make(); if (!it) return;
+  startPull(it, h); pulse(h, 0.3, 30);
+}
+function deskPull() {
+  const o = camera.getWorldPosition(V());
+  const c = pullCandidate(o, deskDir());
+  if (!c) { msg('Nic do przyciągnięcia', '#c8c0a8', 1.2); return; }
+  const it = c.make(); if (it) startPull(it, 'desk');
+}
+function updatePulls(dt) {
+  for (const it of [...items.list]) {
+    if (!it.pull) continue;
+    const h = it.pull;
+    it.pullT += dt;
+    const target = h === 'desk' ? camera.getWorldPosition(V()).add(V().set(0, -0.35, 0)).addScaledVector(deskDir(), 0.4) : h.pos;
+    const v = target.clone().sub(it.pos), d = v.length();
+    if (d < 0.14 || it.pullT > 3) {
+      it.pull = null;
+      if (h === 'desk') {
+        // komputer: prosto do kieszeni (albo odrzut uzbrojonego granatu)
+        if (it.kind === 'grenade' && it.armed) { it.vel.copy(deskDir().multiplyScalar(18).add(V().set(0, 4, 0))); it.byPlayer = true; msg('Odrzucony granat!', '#ffd080'); }
+        else if (it.kind === 'grenade' && P.pouch.grenade < POUCH_CAP.grenade) { P.pouch.grenade++; items.remove(it); audio.ui('magin', 0.5); }
+        else if (it.kind === 'mag' && it.rounds > 0 && P.pouch[it.type].length < POUCH_CAP[it.type]) { P.pouch[it.type].push(it.rounds); items.remove(it); audio.ui('magin', 0.5); }
+        else { it.vel.set(0, 0, 0); msg('Kieszeń pełna', '#ffb090', 1.2); }
+      } else if (!h.held && !h.mg && P.alive && d < 0.3) holdItem(h, it);
+      else it.vel.set(0, 0, 0);
+      continue;
+    }
+    const sp = Math.min(18, 3 + it.pullT * 30);
+    it.pos.addScaledVector(v.divideScalar(d), Math.min(d, sp * dt));
+    it.vel.set(0, 0, 0);
+    it.mesh.rotateOnAxis(it.spin, dt * 10);
+  }
+}
+
+// ---------- wsparcie artylerii ----------
+const ART_CD = 60, ART_R = 9;
+const art = { cd: 0, aim: null, target: V(), valid: false, has: false, shells: [], markT: 0 };
+const artMark = (() => {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color: 0xff5030, transparent: true, opacity: 0.75, depthTest: false, depthWrite: false, toneMapped: false, side: THREE.DoubleSide, fog: false });
+  g.add(new THREE.Mesh(new THREE.RingGeometry(ART_R - 0.35, ART_R, 64).rotateX(-Math.PI / 2), mat));
+  g.add(new THREE.Mesh(new THREE.RingGeometry(0.6, 0.9, 24).rotateX(-Math.PI / 2), mat));
+  for (const a of [0, Math.PI / 2]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(0.25, ART_R * 2 - 1).rotateX(-Math.PI / 2), mat); m.rotation.y = a; g.add(m); }
+  // słup światła, żeby cel był widać z daleka
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 40, 8, 1, true).translate(0, 20, 0), new THREE.MeshBasicMaterial({ color: 0xff6040, transparent: true, opacity: 0.25, depthWrite: false, toneMapped: false, fog: false, blending: THREE.AdditiveBlending }));
+  g.add(beam);
+  g.traverse((o) => { o.renderOrder = 9100; });
+  g.userData.mat = mat; g.visible = false; scene.add(g);
+  return g;
+})();
+function artToggle(who) {
+  if (!P.alive || !['prep', 'wave', 'between'].includes(state.phase)) { msg('Najpierw rozpocznij grę', '#ffb090', 1.5); return; }
+  if (art.aim === who) { art.aim = null; msg('Artyleria: anulowano', '#c8c0a8', 1.2); return; }
+  if (art.cd > 0 || art.shells.length) { msg(`Artyleria niegotowa — ${Math.ceil(Math.max(art.cd, 1))} s`, '#ffb090', 1.8); audio.ui('click', 0.4); return; }
+  art.aim = who; audio.ui('radio', 0.5);
+  msg(who === 'desk' ? 'Artyleria: wskaż cel celownikiem, LPM = ogień, T = anuluj' : 'Artyleria: wskaż cel kontrolerem, spust = ogień', '#ffd080', 3);
+}
+function artRay() {
+  if (art.aim === 'desk') return [camera.getWorldPosition(V()), deskDir()];
+  const h = art.aim;
+  return [h.c.getWorldPosition(V()), V().set(0, 0, -1).applyQuaternion(h.c.getWorldQuaternion(new THREE.Quaternion()))];
+}
+function artFire() {
+  if (!art.has) { msg('Wskaż ziemię na przedpolu', '#ffb090', 1.5); return; }
+  if (!art.valid) { msg('Za blisko naszych okopów! Wskaż cel dalej', '#ff8a7a', 2); audio.ui('click', 0.5); return; }
+  art.aim = null; art.cd = ART_CD; art.markT = 9;
+  const c = art.target.clone();
+  for (let k = 0; k < 9; k++) {
+    const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * ART_R;
+    art.shells.push({ p: V().set(c.x + Math.cos(a) * r, 0, c.z + Math.sin(a) * r), t: 2.4 + k * 0.32 + rnd(0, 0.25), whistle: false });
+  }
+  audio.ui('radio', 0.7);
+  msg('Ogień! Salwa artylerii za 2 s', '#ffd080', 2.5);
+}
+function updateArtillery(dt) {
+  if (!state.paused) art.cd = Math.max(0, art.cd - dt);
+  // celowanie
+  for (const h of hands) if (h === art.aim) { h.ray.visible = true; }
+  if (art.aim) {
+    if (!P.alive) art.aim = null;
+  }
+  if (art.aim) {
+    const [o, d] = artRay(), t = map.rayTerrain(o, d, 520);
+    art.has = isFinite(t);
+    if (art.has) { art.target.copy(o).addScaledVector(d, t); art.valid = art.target.z < -9 && art.target.z > -215; }
+    if (art.aim !== 'desk') { const r = art.aim.ray; r.visible = true; r.scale.z = art.has ? t : 60; r.material.color.set(art.has && art.valid ? 0x60ff60 : 0xff5040); }
+    artMark.visible = art.has; artMark.position.copy(art.target).add(V().set(0, 0.25, 0));
+    artMark.userData.mat.color.set(art.valid ? 0x60ff60 : 0xff4030);
+  } else if (art.markT > 0) {
+    art.markT -= dt; artMark.visible = true; artMark.userData.mat.color.set(0xff8030);
+    artMark.userData.mat.opacity = 0.75 * Math.min(1, art.markT);
+  } else { artMark.visible = false; artMark.userData.mat.opacity = 0.75; }
+  for (const h of hands) if (h !== art.aim && !menu.mesh.visible) { h.ray.visible = false; h.ray.material.color.set(0xffffff); h.ray.scale.z = 2; }
+  if (state.paused) return;
+  // pociski w drodze
+  for (let i = art.shells.length - 1; i >= 0; i--) {
+    const sh = art.shells[i]; sh.t -= dt;
+    if (!sh.whistle && sh.t < 1.7) { sh.whistle = true; sh.p.y = map.heightAt(sh.p.x, sh.p.z); audio.play('incoming', sh.p.clone().add(V().set(0, 25, 0)), 1.6, rnd(0.9, 1.1), 40); }
+    if (sh.t <= 0) { sh.p.y = map.heightAt(sh.p.x, sh.p.z); explodeAt(sh.p, ART_R * 0.9, true, 2.3); audio.play('thunder', sh.p, 1, 1.3, 30); art.shells.splice(i, 1); }
+  }
+}
+
+// ---------- kolimator: czerwona kropka widoczna tylko przez okienko celownika ----------
+const redDot = (() => {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const c = cv.getContext('2d');
+  c.strokeStyle = 'rgba(255,40,30,0.9)'; c.lineWidth = 3; c.beginPath(); c.arc(64, 64, 50, 0, Math.PI * 2); c.stroke();
+  const g = c.createRadialGradient(64, 64, 0, 64, 64, 6); g.addColorStop(0, 'rgba(255,80,60,1)'); g.addColorStop(0.6, 'rgba(255,30,20,1)'); g.addColorStop(1, 'rgba(255,0,0,0)');
+  c.fillStyle = g; c.beginPath(); c.arc(64, 64, 6, 0, Math.PI * 2); c.fill();
+  for (const [x, y] of [[64, 6], [64, 122], [6, 64], [122, 64]]) { c.fillStyle = 'rgba(255,40,30,0.9)'; c.fillRect(x - 1.5, y - 1.5, 3, 3); }
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, depthWrite: false, transparent: true, toneMapped: false, fog: false }));
+  s.renderOrder = 9990; s.visible = false; scene.add(s);
+  return s;
+})();
+const _inv = new THREE.Matrix4();
+function updateRedDot(mesh, desk) {
+  redDot.visible = false;
+  if (!mesh || !mesh.visible || !mesh.userData.sight) return;
+  mesh.updateWorldMatrix(true, false);
+  const eye = camera.getWorldPosition(V()), e = eye.clone().applyMatrix4(_inv.copy(mesh.matrixWorld).invert()), S = mesh.userData.sight;
+  // kropka „w nieskończoności”: widać ją, gdy oko patrzy wzdłuż osi lufy przez okienko
+  if (!desk && (e.z < S.z + 0.04 || Math.hypot(e.x - S.x, e.y - S.y) > mesh.userData.sightR * 1.1)) return;
+  // na komputerze kula leci dokładnie w środek ekranu — kropka też
+  const dir = desk ? deskDir() : V().set(0, 0, -1).transformDirection(mesh.matrixWorld), D = 60;
+  redDot.position.copy(eye).addScaledVector(dir, D);
+  redDot.scale.setScalar(0.02 * D / 0.39);          // pierścień ~20 mrad, kropka ~2,5 mrad
+  redDot.visible = true;
 }
 
 // ---------- pętla ----------
@@ -663,6 +878,7 @@ function updateHands(dt) {
     h.grip.getWorldPosition(h.pos); h.c.getWorldQuaternion(h.q);
     const v = h.pos.clone().sub(h.last).divideScalar(Math.max(dt, 1e-3));
     h.vel.lerp(v, 0.5); h.last.copy(h.pos);
+    h.hist.push(h.vel.clone()); if (h.hist.length > 8) h.hist.shift();
   }
   // kierunek tułowia nadąża za głową
   const cq = camera.getWorldQuaternion(new THREE.Quaternion()), f = V().set(0, 0, -1).applyQuaternion(cq);
@@ -686,7 +902,7 @@ function updateHands(dt) {
       } else mesh.quaternion.copy(h.q);
       mesh.position.copy(h.pos);
       const g = P[k];
-      if (g.kick) { mesh.position.add(V().set(0, 0, g.kick).applyQuaternion(mesh.quaternion)); mesh.quaternion.multiply(_q.setFromAxisAngle(V().set(1, 0, 0), g.kick * 2.5)); }
+      if (g.kick) { mesh.position.add(V().set(0, 0, g.kick).applyQuaternion(mesh.quaternion)); mesh.quaternion.multiply(_q.setFromAxisAngle(V().set(1, 0, 0), g.kick * 0.9)); }
     } else {
       // kabura / plecy / pochwa
       mesh.position.copy(slotPos(k));
@@ -708,6 +924,14 @@ function updateHands(dt) {
       if (gk === it.type && !P[gk].mag && wellWorld(gk).distanceTo(it.mesh.position) < 0.12) { insert(gk, it); h.held = null; pulse(h, 0.6, 50); pulse(o, 0.6, 50); }
     }
   }
+  // podświetlenie slotu, który złapie wolna dłoń (+ lekkie drgnięcie przy wejściu)
+  for (const h of hands) {
+    const m = zoneMarks[h.i];
+    const z = xr && P.alive && !h.held && !h.mg && !h.support && h.source ? slotAt(h) : null;
+    if (z !== h.zone) { h.zone = z; if (z) pulse(h, 0.12, 15); }
+    m.visible = !!z;
+    if (z) { slotPos(z, m.position); m.scale.setScalar(SLOT_R[z] * 0.45); m.material.color.setHex(SLOT_COL[z]); }
+  }
   // kieszenie
   for (const [type, g] of Object.entries(pouches)) {
     g.visible = xr; if (!xr) continue;
@@ -717,7 +941,7 @@ function updateHands(dt) {
   }
   // strzelanie z karabinu (ogień ciągły) i nóż
   for (const h of hands) {
-    if (h.held?.kind === 'rifle' && h.trigger && P.rifle.cd <= 0 && P.alive) fireGun('rifle', GUNS.rifle.muzzle.clone().applyMatrix4(P.rifle.mesh.matrixWorld), V().set(0, 0, -1).transformDirection(P.rifle.mesh.matrixWorld), h);
+    if (h.held?.kind === 'rifle' && h.trigger && !h.blockFire && art.aim !== h && P.rifle.cd <= 0 && P.alive) fireGun('rifle', GUNS.rifle.muzzle.clone().applyMatrix4(P.rifle.mesh.matrixWorld), V().set(0, 0, -1).transformDirection(P.rifle.mesh.matrixWorld), h);
     if (h.held?.kind === 'knife' && P.alive) knifeContact(h, dt);
   }
 }
@@ -738,7 +962,7 @@ function updateGuns(dt) {
     for (let k = 0; k < shots; k++) {
       const mz = g.muzzleWorld(), d = g.dirWorld().add(V().set(rnd(-1, 1), rnd(-1, 1), rnd(-1, 1)).multiplyScalar(0.012)).normalize();
       const end = shootRay(mz, d, [26, 34], 100);
-      if (k % 2 === 0) troops.tracers.push({ a: mz.clone(), b: end, t: 0, T: mz.distanceTo(end) / 750, side: 0 });
+      if (k % 2 === 0) troops.tracers.push({ a: mz.clone(), b: end, t: 0, T: mz.distanceTo(end) / (TRACER_V * 1.2), side: 0, player: true, len: 6 });
       fx.flash(mz, 0.3);
     }
     if (users.length && g.firing) for (const h of users) pulse(h, 0.45, 30);
@@ -757,18 +981,22 @@ function updatePlayerProxy() {
 function updateHud() {
   const enemies = troops.soldiers.filter((s) => s.side === 1 && s.state === 'alive').length;
   const ph = state.phase;
-  const sub = ph === 'idle' ? 'Naciśnij A (Enter), by zacząć' : ph === 'prep' || ph === 'between' ? `Następna fala za ${Math.ceil(state.timer)} s` : ph === 'wave' ? `Wrogów: ${enemies}` : 'Poległeś — A / Enter: od nowa';
+  const xr = renderer.xr.isPresenting;
+  const sub = ph === 'idle' ? 'Naciśnij A (Enter), by zacząć' : ph === 'prep' || ph === 'between' ? (state.auto ? `Następna fala za ${Math.ceil(state.timer)} s` : xr ? 'Wezwij falę: menu (Y/B)' : 'Wezwij falę: N') : ph === 'wave' ? `Wrogów: ${enemies}` : 'Poległeś — A / Enter: od nowa';
+  const artReady = art.cd <= 0;
+  const artTxt = art.aim ? 'ARTYLERIA: wskaż cel, spust = ogień' : art.shells.length ? 'Artyleria: salwa w drodze…' : artReady ? (xr ? 'Artyleria gotowa — wciśnij gałkę' : 'Artyleria gotowa — T') : `Artyleria: ${Math.ceil(art.cd)} s`;
   const s = {
     title: state.wave ? `FALA ${state.wave}` : 'OKOPY', kills: P.kills, hp: Math.round(P.hp),
     r: P.rifle.mag ? P.rifle.mag.rounds : '—', rp: P.pouch.rifle.length, p: P.pistol.mag ? P.pistol.mag.rounds : '—', pp: P.pouch.pistol.length, g: P.pouch.grenade,
     allies: troops.alive(0).length, ar: ars.rifle, ap: ars.pistol, ag: ars.grenade, sub: state.paused ? 'PAUZA' : sub,
-    hint: renderer.xr.isPresenting ? 'Y/B: menu · A/X: wyrzuć magazynek' : '1–4 broń · R przeład. · G granat · E użyj · C kucnij',
+    art: artTxt, artReady,
+    hint: xr ? 'Y/B: menu · A/X: wyrzuć mag. · spust pustą ręką: przyciągnij' : '1–4 broń · R · G granat · E/F weź · T artyl. · N fala',
   };
   wrist.draw(s);
   banner.mesh.visible = renderer.xr.isPresenting;
   banner.draw(state.msgT > 0 ? state.msg : '', state.msgCol);
   const dm = document.getElementById('msg'); dm.textContent = state.msgT > 0 ? state.msg : ''; dm.style.color = state.msgCol;
-  menu.draw({ phase: state.phase, paused: state.paused });
+  menu.draw({ phase: state.phase, paused: state.paused, auto: state.auto });
 }
 function updateMenuHover() {
   const r = hands.find((h) => h.hand === 'right' && h.source);
@@ -796,10 +1024,14 @@ function frame() {
   if (!state.paused) {
     updateGame(dt);
     troops.update(dt, P, running);
+    updatePulls(dt);
     items.update(dt);
+    smoke.update(dt);
   }
   updateHands(dt);
   updateGuns(dt);
+  viewModel.visible = !xr;
+  updateRedDot(xr ? hands.find((h) => h.held?.kind === 'rifle') && P.rifle.mesh : vm.rifle.visible && ads ? vm.rifle : null, !xr);
   for (const k of ['rifle', 'pistol']) { const g = P[k]; g.cd = Math.max(0, g.cd - dt); g.kick = Math.max(0, g.kick - dt * 0.35); }
   fx.update(dt);
   troops.render();
@@ -815,11 +1047,12 @@ function frame() {
   ambT -= dt; if (ambT <= 0) { ambT = rnd(5, 14); audio.play('thunder', V().set(rnd(-300, 300), 0, rnd(-400, -150)), 0.9, rnd(0.7, 1.1), 60); }
   map.lampLight.intensity = 3 + Math.sin(clockT * 13) * 0.2 + Math.sin(clockT * 7.3) * 0.25;
   updateMenuHover();
+  updateArtillery(dt);
   updateHud();
   renderer.render(scene, camera);
 }
 renderer.setAnimationLoop(frame);
-function simStep(dt) { updatePlayerProxy(); if (!state.paused) { updateGame(dt); troops.update(dt, P, !state.paused && ['prep', 'wave', 'between'].includes(state.phase)); items.update(dt); } fx.update(dt); }
+function simStep(dt) { updatePlayerProxy(); if (!state.paused) { updateGame(dt); troops.update(dt, P, !state.paused && ['prep', 'wave', 'between'].includes(state.phase)); updatePulls(dt); items.update(dt); smoke.update(dt); } updateArtillery(dt); fx.update(dt); }
 window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
 
 // ---------- przyciski strony ----------
@@ -845,5 +1078,5 @@ async function startXR() {
 })();
 camera.position.set(0, EYE_T - FLOOR, 0);
 
-window.__trench = { simStep, map, troops, items, guns, P, state, startGame, nextWave, camera, rig, scene, THREE, hands, fireGun, shootRay, ars, look, keys, updateDesktop, menuAction, get desk() { return desk; }, set desk(v) { desk = v; }, deskReload, deskInteract, deskThrow, set mounted(v) { mounted = v; }, get mounted() { return mounted; } };
+window.__trench = { smoke, art, artToggle, artFire, callWave, pullToHand, deskPull, redDot, vm, set ads(v) { ads = v; }, simStep, map, troops, items, guns, P, state, startGame, nextWave, camera, rig, scene, THREE, hands, fireGun, shootRay, ars, look, keys, updateDesktop, menuAction, get desk() { return desk; }, set desk(v) { desk = v; }, deskReload, deskInteract, deskThrow, set mounted(v) { mounted = v; }, get mounted() { return mounted; } };
 void MAG;

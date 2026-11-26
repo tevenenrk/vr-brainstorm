@@ -19,7 +19,10 @@
     #hud { position: fixed; right: 16px; top: 16px; }
     #hud canvas { width: 320px; height: auto; display: block; }
     #msg { position: fixed; left: 0; right: 0; top: 24%; text-align: center; font: bold 30px system-ui, sans-serif; text-shadow: 0 2px 8px #000; pointer-events: none; }
-    #cross { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(255,255,255,0.8); box-shadow: 0 0 3px #000; pointer-events: none; }
+    #cross { position: fixed; left: 50%; top: 50%; width: 2px; height: 2px; margin: -1px 0 0 -1px; background: #ff3a2a; pointer-events: none; }
+    #cross::before, #cross::after { content: ''; position: absolute; background: rgba(255,255,255,0.85); box-shadow: 0 0 1px #000; }
+    #cross::before { left: -11px; top: 0; width: 24px; height: 2px; clip-path: polygon(0 0, 30% 0, 30% 100%, 0 100%, 0 0, 70% 0, 100% 0, 100% 100%, 70% 100%, 70% 0); }
+    #cross::after { top: -11px; left: 0; width: 2px; height: 24px; clip-path: polygon(0 0, 100% 0, 100% 30%, 0 30%, 0 0, 0 70%, 100% 70%, 100% 100%, 0 100%, 0 70%); }
     #menu { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); display: none; background: rgba(24, 22, 16, 0.94); border: 1px solid rgba(210, 190, 130, 0.5); border-radius: 14px; padding: 18px 22px; }
     #menu button { display: block; width: 260px; margin: 8px 0; }
     body.in-xr #panel, body.in-xr #hud, body.in-xr #msg, body.in-xr #cross, body.in-xr #menu { display: none !important; }
@@ -42,8 +45,8 @@
       <a class="btn alt" href="reaper.html">Kostucha</a>
     </div>
     <p id="xr-note"></p>
-    <p><b>VR:</b> chwyt (grip) przy biodrze/plecach/klatce — weź pistolet/karabin/nóż; przy pasie z przodu — magazynek (lewa ładownica) albo granat (prawa); spust — strzał, z granatem spust wyciąga zawleczkę, puszczenie chwytu = rzut; <kbd>A</kbd>/<kbd>X</kbd> — wyrzuć magazynek, nowy włóż, przykładając go do gniazda broni; puszczony przy ładownicy magazynek trafia do kieszeni. Lewą dłonią złap łoże karabinu — stabilniej. Minigun: chwyć oba uchwyty z tyłu. Kucnij, by się schować. Lewa gałka — chód, prawa — obrót, <kbd>Y</kbd>/<kbd>B</kbd> — menu.</p>
-    <p><b>Komputer:</b> klik — przechwyć mysz, <kbd>WASD</kbd> (<kbd>Shift</kbd> bieg), <kbd>C</kbd> kucnij, LPM strzał, PPM celowanie, <kbd>1</kbd>–<kbd>4</kbd> karabin/pistolet/granat/nóż, <kbd>R</kbd> przeładuj z kieszeni, <kbd>G</kbd> granat, <kbd>E</kbd> minigun / arsenał / zabierz poległemu / podnieś, <kbd>Enter</kbd> start/pauza, <kbd>O</kbd> menu.</p>
+    <p><b>VR:</b> chwyt (grip) przy biodrze/plecach/klatce — weź pistolet/karabin/nóż; przy pasie z przodu — magazynek (lewa ładownica) albo granat (prawa); spust — strzał, z granatem spust wyciąga zawleczkę, puszczenie chwytu = rzut; <kbd>A</kbd>/<kbd>X</kbd> — wyrzuć magazynek, nowy włóż, przykładając go do gniazda broni; puszczony przy ładownicy magazynek trafia do kieszeni. Lewą dłonią złap łoże karabinu — stabilniej. Minigun: chwyć oba uchwyty z tyłu. Pusta ręka + spust — wskazany przedmiot (magazynek, granat, łup z poległego, zapas z arsenału) przylatuje do dłoni. Wciśnięcie gałki — artyleria: wskaż cel na przedpolu, spust = salwa (raz na minutę). Kucnij, by się schować. Lewa gałka — chód, prawa — obrót, <kbd>Y</kbd>/<kbd>B</kbd> — menu (tam też „Wezwij falę” i fale automatyczne / na żądanie).</p>
+    <p><b>Komputer:</b> klik — przechwyć mysz, <kbd>WASD</kbd> (<kbd>Shift</kbd> bieg), <kbd>C</kbd> kucnij, LPM strzał, PPM celowanie, <kbd>1</kbd>–<kbd>4</kbd> karabin/pistolet/granat/nóż, <kbd>R</kbd> przeładuj z kieszeni, <kbd>G</kbd> granat, <kbd>E</kbd> minigun / arsenał / zabierz poległemu / podnieś, <kbd>F</kbd> przyciągnij wskazany przedmiot, <kbd>T</kbd> artyleria (cel celownikiem, LPM = ogień), <kbd>N</kbd> wezwij falę, <kbd>Enter</kbd> start/pauza, <kbd>O</kbd> menu.</p>
   </div>
   <div id="hud"></div>
   <div id="msg"></div>
@@ -51,6 +54,8 @@
   <div id="menu">
     <button data-act="run">Start / pauza</button>
     <button data-act="restart">Od nowa</button>
+    <button data-act="wave">Wezwij falę (N)</button>
+    <button data-act="auto">Fale: auto / na żądanie</button>
     <button data-act="mode:index.html" class="alt">Artyleria</button>
     <button data-act="mode:medieval.html" class="alt">Bitwa średniowieczna</button>
   </div>

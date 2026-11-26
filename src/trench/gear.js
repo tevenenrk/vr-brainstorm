@@ -12,8 +12,8 @@ const bx = (w, h, d, x, y, z, m = STEEL) => { const o = new THREE.Mesh(new THREE
 const cyl = (r, l, x, y, z, m = STEEL, seg = 10) => { const o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, l, seg).rotateX(Math.PI / 2), m); o.position.set(x, y, z); return o; };
 
 export const GUNS = {
-  rifle: { name: 'Karabin', mag: 30, auto: true, rate: 11, dmg: [36, 48], head: 100, spread: 0.004, recoil: 0.018, muzzle: new THREE.Vector3(0, 0.045, -0.66), well: new THREE.Vector3(0, -0.03, -0.12), fore: new THREE.Vector3(0, 0.0, -0.34), sound: 'rifle' },
-  pistol: { name: 'Pistolet', mag: 12, auto: false, rate: 6, dmg: [28, 38], head: 100, spread: 0.008, recoil: 0.03, muzzle: new THREE.Vector3(0, 0.065, -0.17), well: new THREE.Vector3(0, -0.085, 0.015), sound: 'pistol' },
+  rifle: { name: 'Karabin', mag: 30, auto: true, rate: 11, dmg: [36, 48], head: 100, spread: 0.0012, recoil: 0.012, muzzle: new THREE.Vector3(0, 0.045, -0.66), well: new THREE.Vector3(0, -0.03, -0.12), fore: new THREE.Vector3(0, 0.0, -0.34), sound: 'rifle' },
+  pistol: { name: 'Pistolet', mag: 12, auto: false, rate: 6, dmg: [28, 38], head: 100, spread: 0.003, recoil: 0.03, muzzle: new THREE.Vector3(0, 0.065, -0.17), well: new THREE.Vector3(0, -0.085, 0.015), sound: 'pistol' },
 };
 export const POUCH_CAP = { rifle: 4, pistol: 3, grenade: 3 };
 
@@ -49,12 +49,12 @@ export function rifleMesh() {
   g.add(bx(0.05, 0.075, 0.32, 0, 0.035, -0.09), bx(0.05, 0.055, 0.24, 0, 0.03, -0.34, WOODM), cyl(0.011, 0.3, 0, 0.045, -0.52), cyl(0.016, 0.05, 0, 0.045, -0.66, DARK));
   g.add(bx(0.04, 0.085, 0.26, 0, 0.015, 0.2, WOODM), bx(0.045, 0.1, 0.03, 0, 0.0, 0.33, DARK));
   // celownik kolimatorowy
-  g.add(bx(0.012, 0.03, 0.05, 0, 0.088, -0.05, DARK), bx(0.034, 0.006, 0.05, 0, 0.11, -0.05, DARK));
-  const frame = new THREE.Mesh(new THREE.TorusGeometry(0.018, 0.0035, 6, 16), DARK); frame.position.set(0, 0.112, -0.075); g.add(frame);
-  const glass = new THREE.Mesh(new THREE.CircleGeometry(0.016, 16), new THREE.MeshBasicMaterial({ color: 0x7090a0, transparent: true, opacity: 0.18, depthWrite: false })); glass.position.copy(frame.position); g.add(glass);
+  g.add(bx(0.03, 0.012, 0.06, 0, 0.078, -0.07, DARK), bx(0.01, 0.012, 0.012, 0, 0.088, -0.075, DARK));     // podstawa pod okienkiem (nic nie zasłania szkła)
+  const frame = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.003, 6, 20), DARK); frame.position.set(0, 0.112, -0.075); g.add(frame);
+  const glass = new THREE.Mesh(new THREE.CircleGeometry(0.02, 20), new THREE.MeshBasicMaterial({ color: 0x7090a0, transparent: true, opacity: 0.1, depthWrite: false })); glass.position.copy(frame.position); g.add(glass);
   g.add(bx(0.006, 0.03, 0.006, 0, 0.075, -0.6, DARK));
   const cnt = counterPanel(); cnt.position.set(-0.026, 0.05, -0.12); cnt.rotation.y = -Math.PI / 2; g.add(cnt);
-  g.userData.counter = cnt; g.userData.sight = frame.position.clone();
+  g.userData.counter = cnt; g.userData.sight = frame.position.clone(); g.userData.sightR = 0.02;
   return g;
 }
 export function pistolMesh() {
@@ -90,7 +90,7 @@ export class Items {
   remove(it) { this.parent.remove(it.mesh); const i = this.list.indexOf(it); if (i >= 0) this.list.splice(i, 1); }
   nearest(p, r, filter) {
     let best = null, bd = r;
-    for (const it of this.list) { if (it.held || (filter && !filter(it))) continue; const d = it.pos.distanceTo(p); if (d < bd) { bd = d; best = it; } }
+    for (const it of this.list) { if (it.held || it.pull || (filter && !filter(it))) continue; const d = it.pos.distanceTo(p); if (d < bd) { bd = d; best = it; } }
     return best;
   }
   update(dt) {
@@ -102,7 +102,7 @@ export class Items {
         it.fuse -= dt;
         if (it.fuse <= 0) { const p = it.pos.clone(); if (it.drop) it.drop(it); this.remove(it); if (this.onExplode) this.onExplode(p, it); continue; }
       }
-      if (it.held) continue;
+      if (it.held || it.pull) continue;
       if (!it.armed && it.age > 120) { this.remove(it); continue; }
       if (it.rest) continue;
       it.vel.y -= 9.81 * dt;
@@ -211,10 +211,10 @@ export class Fx {
   blood(p) { for (let k = 0; k < 6; k++) this.smoke.spawn({ p, v: new THREE.Vector3((Math.random() - 0.5) * 1.5, Math.random() * 1.5, (Math.random() - 0.5) * 1.5), life: 0.35 + Math.random() * 0.3, s0: 0.03, s1: 0.1, c0: 0x8a1010, c1: 0x4a0808, drag: 0.4, g: 5 }); }
   sparks(p) { for (let k = 0; k < 5; k++) this.fire.spawn({ p, v: new THREE.Vector3((Math.random() - 0.5) * 4, Math.random() * 3, (Math.random() - 0.5) * 4), life: 0.15 + Math.random() * 0.15, s0: 0.012, s1: 0.004, c0: 0xffe0a0, c1: 0xff6000, drag: 0.5, g: 9 }); }
   steam(p) { this.smoke.spawn({ p, v: new THREE.Vector3((Math.random() - 0.5) * 0.3, 0.6 + Math.random() * 0.5, (Math.random() - 0.5) * 0.3), life: 1.2 + Math.random(), s0: 0.04, s1: 0.25, c0: 0xe8e8e8, c1: 0xb8b8b8, drag: 0.6 }); }
-  explosion(p) {
-    for (let k = 0; k < 26; k++) this.fire.spawn({ p, v: new THREE.Vector3((Math.random() - 0.5) * 9, Math.random() * 7, (Math.random() - 0.5) * 9), life: 0.2 + Math.random() * 0.3, s0: 0.3, s1: 0.9, c0: 0xffe8b0, c1: 0x802000, drag: 0.05 });
-    for (let k = 0; k < 30; k++) this.smoke.spawn({ p: p.clone().add(new THREE.Vector3(0, 0.2, 0)), v: new THREE.Vector3((Math.random() - 0.5) * 5, 1 + Math.random() * 5, (Math.random() - 0.5) * 5), life: 1.5 + Math.random() * 2, s0: 0.3, s1: 1.6, c0: 0x3a3028, c1: 0x7a7066, drag: 0.4, g: 1.5 });
-    for (let k = 0; k < 14; k++) this.smoke.spawn({ p, v: new THREE.Vector3((Math.random() - 0.5) * 8, 3 + Math.random() * 6, (Math.random() - 0.5) * 8), life: 1 + Math.random(), s0: 0.06, s1: 0.1, c0: 0x4a3a28, c1: 0x4a3a28, drag: 0.9, g: 9.8 });
+  explosion(p, S = 1) {
+    for (let k = 0; k < 26; k++) this.fire.spawn({ p, v: new THREE.Vector3((Math.random() - 0.5) * 9 * S, Math.random() * 7 * S, (Math.random() - 0.5) * 9 * S), life: 0.2 + Math.random() * 0.3 * S, s0: 0.3 * S, s1: 0.9 * S, c0: 0xffe8b0, c1: 0x802000, drag: 0.05 });
+    for (let k = 0; k < 30; k++) this.smoke.spawn({ p: p.clone().add(new THREE.Vector3(0, 0.2, 0)), v: new THREE.Vector3((Math.random() - 0.5) * 5 * S, 1 + Math.random() * 5 * S, (Math.random() - 0.5) * 5 * S), life: 1.5 + Math.random() * 2 * S, s0: 0.3 * S, s1: 1.6 * S, c0: 0x3a3028, c1: 0x7a7066, drag: 0.4, g: 1.5 });
+    for (let k = 0; k < 14 * S; k++) this.smoke.spawn({ p, v: new THREE.Vector3((Math.random() - 0.5) * 8 * S, 3 + Math.random() * 6 * S, (Math.random() - 0.5) * 8 * S), life: 1 + Math.random() * S, s0: 0.06 * S, s1: 0.1 * S, c0: 0x4a3a28, c1: 0x4a3a28, drag: 0.9, g: 9.8 });
   }
   update(dt) {
     this.fire.update(dt); this.smoke.update(dt);

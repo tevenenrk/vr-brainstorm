@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { FLOOR, EYE, SPAWN_Z } from './world.js';
 
+export const TRACER_V = 320;          // widoczna prędkość smugi (m/s) — wolniej niż kula, żeby było ją widać
+
 // Żołnierze (sojusznicy i wrogowie): rysowani jako instancje części ciała, proste AI.
 const rnd = (a, b) => a + Math.random() * (b - a);
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -51,17 +53,22 @@ export class Troops {
     this.tracerLines = new THREE.LineSegments(tg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
     this.tracerLines.frustumCulled = false;
     parent.add(this.tracerLines);
+    // smugi z objętością (widoczne z bliska w goglach): rozciągnięte walce
+    this.tracerGlow = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 5, 1, true).translate(0, 0.5, 0).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false }), 400);
+    this.tracerGlow.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.tracerGlow.setColorAt(0, new THREE.Color()); this.tracerGlow.frustumCulled = false; this.tracerGlow.count = 0;
+    parent.add(this.tracerGlow);
     // zdarzenia dla dźwięku i efektów
+    this.onSmoke = null; this.smoke = null;      // zasłony dymne: { blocks(a, b) }
     this.onShot = null; this.onDeath = null; this.onPlayerHit = null; this.onNearMiss = null; this.onThrow = null; this.onImpact = null; this.onMelee = null; this.onResupply = null;
     this.arsenal = null;      // { rifle } — zapas magazynków
-    this._m = new THREE.Matrix4(); this._m2 = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._p = new THREE.Vector3(); this._s = new THREE.Vector3(1, 1, 1); this._v = new THREE.Vector3(); this._up = new THREE.Vector3(0, 1, 0); this._x = new THREE.Vector3(1, 0, 0);
+    this._m = new THREE.Matrix4(); this._m2 = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._p = new THREE.Vector3(); this._s = new THREE.Vector3(1, 1, 1); this._v = new THREE.Vector3(); this._up = new THREE.Vector3(0, 1, 0); this._c = new THREE.Color(); this._x = new THREE.Vector3(1, 0, 0);
   }
   clear() { this.soldiers = []; this.tracers = []; }
   alive(side) { return this.soldiers.filter((s) => s.state === 'alive' && (side === undefined || s.side === side)); }
 
   add(side, x, z, extra = {}) {
     const s = { side, x, z, y: this.map.floorAt(x, z), yaw: side === 1 ? 0 : Math.PI, hp: 100, state: 'alive', stance: 0, phase: Math.random() * 6, speed: 0, aim: 0, aimPitch: 0,
-      cd: rnd(0.5, 2), look: 0, target: null, mag: MAG, spare: side ? 3 : 4, grenades: side ? (Math.random() < 0.45 ? 1 : 0) : 0, reload: 0, path: null, pathT: 0, t: 0,
+      cd: rnd(0.5, 2), look: 0, target: null, mag: MAG, spare: side ? 3 : 4, grenades: side ? (Math.random() < 0.45 ? 1 : 0) : 0, smokes: 0, reload: 0, path: null, pathT: 0, t: 0,
       fall: new THREE.Vector3(1, 0, 0), mode: side ? 'advance' : 'post', moveT: 0, ...extra };
     this.soldiers.push(s);
     return s;
@@ -72,6 +79,7 @@ export class Troops {
       const x = rnd(-60, 60), z = rnd(SPAWN_Z[0], SPAWN_Z[1]);
       const b = bays[(Math.random() * bays.length) | 0];
       const s = this.add(1, x, z, { delay: k * rnd(0.3, 0.8), goal: new THREE.Vector2(rnd(b.x0 + 0.8, b.x1 - 0.8), -2.7), rush: wave > 3 && Math.random() < 0.25 });
+      if (Math.random() < Math.min(0.3, 0.1 + wave * 0.03)) s.smokes = 1;
       s.yaw = 0;
     }
   }
@@ -178,6 +186,7 @@ export class Troops {
     // obrońca wygląda zza worków (oko jak na stojąco), atakujący patrzy z bieżącej pozycji
     const st = s.stance; if (s.side === 0) s.stance = 0;
     const eye = this.eyePos(s, new THREE.Vector3()); s.stance = st;
+    if (this.smoke && this.smoke.blocks(eye, o.isPlayer ? o.head : this.chestPos(o, new THREE.Vector3()))) return 0;
     if (o.isPlayer) {
       if (this.map.los(eye, o.head)) return o.chestVisible = this.map.los(eye, o.chest), 1;
       return 0;
@@ -256,7 +265,7 @@ export class Troops {
       const head = Math.random() < 0.15;
       this.damage(o, head ? 100 : rnd(34, 48), s, head ? 'head' : 'body');
     }
-    this.tracers.push({ a: muzzle, b: end, t: 0, T: muzzle.distanceTo(end) / 650, side: s.side });
+    this.tracers.push({ a: muzzle, b: end, t: 0, T: muzzle.distanceTo(end) / TRACER_V, side: s.side });
     if (this.onShot) this.onShot(s, muzzle);
   }
   melee(s, o) {
@@ -288,6 +297,12 @@ export class Troops {
         // skok do okopu
         const c = this.map.nearestTrench(s.x, s.z + 1.6, 3);
         if (c) { s.x = c.x; s.z = c.y; s.mode = 'trench'; s.stance = 0; s.path = null; return; }
+      }
+      // zasłona dymna przed natarciem
+      if (s.smokes > 0 && d > 32 && d < 95 && Math.random() < dt * 0.12 && this.onSmoke) {
+        s.smokes--; s.aim = 1;
+        const k = Math.min(1, rnd(16, 26) / d);
+        this.onSmoke(s, new THREE.Vector3(s.x + (g.x - s.x) * k + rnd(-4, 4), 0, s.z + (g.y - s.z) * k));
       }
       const assault = d < 24 || s.rush;
       if (assault || s.phaseMove) {
@@ -407,15 +422,24 @@ export class Troops {
     let k = 0;
     for (const t of this.tracers) {
       if (k >= 400) break;
-      const L = t.a.distanceTo(t.b), u1 = Math.min(1, t.t / Math.max(t.T, 1e-3)), u0 = Math.max(0, u1 - 5 / Math.max(L, 1));
+      const L = t.a.distanceTo(t.b), u1 = Math.min(1, t.t / Math.max(t.T, 1e-3)), u0 = Math.max(0, u1 - (t.len || 6) / Math.max(L, 1));
       const a = this._v.copy(t.a).lerp(t.b, u0), b = new THREE.Vector3().copy(t.a).lerp(t.b, u1);
       pa.setXYZ(k * 2, a.x, a.y, a.z); pa.setXYZ(k * 2 + 1, b.x, b.y, b.z);
-      const cc = t.side ? [0.6, 0.45, 0.25] : [1, 0.85, 0.5];
+      const cc = t.side ? [0.75, 0.5, 0.25] : t.player ? [1, 0.75, 0.35] : [1, 0.85, 0.5];
       ca.setXYZ(k * 2, cc[0] * 0.2, cc[1] * 0.2, cc[2] * 0.2); ca.setXYZ(k * 2 + 1, ...cc);
+      const seg = a.distanceTo(b);
+      if (seg > 0.05) {
+        const r = t.player ? 0.009 : 0.006;
+        this._m.lookAt(b, a, this._up); this._q.setFromRotationMatrix(this._m);
+        this._m2.compose(b, this._q, this._s.set(r, r, seg));     // walec biegnie wzdłuż −Z: od czoła smugi (b) do ogona (a)
+        this.tracerGlow.setMatrixAt(k, this._m2); this._s.set(1, 1, 1);
+        this.tracerGlow.setColorAt(k, this._c.setRGB(cc[0] * 0.9, cc[1] * 0.7, cc[2] * 0.5));
+      } else this.tracerGlow.setMatrixAt(k, this._m2.makeScale(0, 0, 0));
       k++;
     }
     this.tracerLines.geometry.setDrawRange(0, k * 2);
     pa.needsUpdate = true; ca.needsUpdate = true;
+    this.tracerGlow.count = k; this.tracerGlow.instanceMatrix.needsUpdate = true; if (this.tracerGlow.instanceColor) this.tracerGlow.instanceColor.needsUpdate = true;
   }
 }
 

@@ -36,6 +36,11 @@ export class TrenchAudio {
       spin: B(1, (t) => (Math.sin(2 * Math.PI * 180 * t) * 0.2 + Math.sin(2 * Math.PI * 361 * t) * 0.12 + (Math.random() - 0.5) * 0.08)),
       steam: (() => { const n = noiseLP(6000); return B(2.2, (t) => n() * 1.5 * Math.min(1, t * 8) * Math.exp(-t * 1.2)); })(),
       wind: (() => { const n = noiseLP(400), m = noiseLP(1.2); return B(6, (t) => n() * 1.8 * (0.6 + m() * 6) * Math.min(1, t, 6 - t)); })(),
+      // świst nadlatującego pocisku artyleryjskiego (opadający ton, narasta)
+      incoming: B(1.7, (t, st) => { const f = 1250 - 650 * (t / 1.7); st.ph = (st.ph || 0) + 2 * Math.PI * f / ctx.sampleRate; return (Math.sin(st.ph) * 0.7 + (Math.random() - 0.5) * 0.15) * (t / 1.7) ** 1.6 * 0.6; }),
+      // krótki sygnał radiowy
+      radio: B(0.5, (t) => { const on = (t < 0.12) || (t > 0.2 && t < 0.32); return on ? (Math.sin(2 * Math.PI * 1050 * t) * 0.35 + (Math.random() - 0.5) * 0.08) : (Math.random() - 0.5) * 0.06 * Math.exp(-(t - 0.32) * 10); }),
+      woosh: (() => { const n = noiseLP(2500); return B(0.35, (t) => n() * 2 * Math.sin(Math.PI * t / 0.35)); })(),
       heart: B(1, (t) => { const k = (u) => (u > 0 ? Math.sin(2 * Math.PI * 50 * u) * Math.exp(-u * 22) : 0); return k(t) + k(t - 0.22) * 0.7; }),
     };
     this.pool = [];
