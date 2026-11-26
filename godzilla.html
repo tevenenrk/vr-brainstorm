@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Godzilla VR</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #a8b4c0; overflow: hidden; font-family: system-ui, sans-serif; color: #e8f0f6; }
+    #app canvas { display: block; }
+    #panel { position: fixed; left: 16px; top: 16px; max-width: 420px; background: rgba(14, 24, 34, 0.88); border: 1px solid rgba(120, 190, 255, 0.4); border-radius: 14px; padding: 16px 18px; box-shadow: 0 8px 30px rgba(0,0,0,0.35); }
+    #panel h1 { margin: 0 0 6px; font-size: 20px; color: #e8f4ff; }
+    #panel p { margin: 6px 0; font-size: 13px; line-height: 1.45; color: #c8d8e6; }
+    .btns { display: flex; gap: 8px; margin: 12px 0 6px; flex-wrap: wrap; }
+    button, a.btn { font: 600 15px system-ui, sans-serif; padding: 10px 14px; border-radius: 10px; border: 0; background: #6ab8ff; color: #06182a; cursor: pointer; text-decoration: none; }
+    button.alt, a.btn.alt { background: #d0dce6; color: #102233; }
+    button:disabled { background: #34404a; color: #8a96a0; cursor: not-allowed; }
+    #xr-note { color: #ffcf8a; min-height: 1em; }
+    kbd { background: #24384a; border-radius: 4px; padding: 1px 5px; font-size: 12px; }
+    #hud { position: fixed; right: 16px; top: 16px; }
+    #hud canvas { width: 320px; height: auto; display: block; }
+    #msg { position: fixed; left: 0; right: 0; top: 22%; text-align: center; font: bold 30px system-ui, sans-serif; text-shadow: 0 2px 8px #000; pointer-events: none; }
+    #cross { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(255,255,255,0.7); pointer-events: none; }
+    #menu { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); display: none; background: rgba(14, 24, 34, 0.94); border: 1px solid rgba(120, 190, 255, 0.5); border-radius: 14px; padding: 18px 22px; }
+    #menu button { display: block; width: 260px; margin: 8px 0; }
+    body.in-xr #panel, body.in-xr #hud, body.in-xr #msg, body.in-xr #cross, body.in-xr #menu { display: none !important; }
+  </style>
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three/build/three.module.min.js", "three/addons/": "./vendor/three/addons/" } }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="panel">
+    <h1>Godzilla</h1>
+    <p>Jesteś Godzillą (ok. 95 m wzrostu) i wychodzisz z zatoki do miasta. Budynki rozpadają się stopniowo: lekki cios zbija szyby i kruszy okładzinę, mocniejszy wybija dziurę, a energia idzie w głąb w kierunku ciosu. Co straci podparcie, odpada jako bryła i spada, miażdżąc to, na co trafi. Przeciążone słupy pękają po chwili, więc podcięty budynek przechyla się i wali piętro po piętrze.</p>
+    <div class="btns">
+      <button id="btn-vr">Wejdź w VR</button>
+      <button id="btn-start" class="alt">Graj na komputerze</button>
+      <a class="btn alt" href="trench.html">Okopy</a>
+      <a class="btn alt" href="medieval.html">Bitwa średniowieczna</a>
+      <a class="btn alt" href="index.html">Artyleria</a>
+    </div>
+    <p id="xr-note"></p>
+    <p><b>VR:</b> bij pazurami — siła zależy od szybkości ręki (powolne pchnięcie tylko kruszy, szybki cios przebija). Chwyt (grip) przy budynku wyrywa jego kawałek, przy aucie albo dużym gruzie — łapie; puść w ruchu, by rzucić. Spust — oddech atomowy (gdzie patrzysz). <kbd>A</kbd>/<kbd>X</kbd> — ryk (pękają szyby w okolicy). Lewa gałka — chód (nogi depczą, co pod nimi), prawa — obrót, klik prawej gałki — zamach ogonem, <kbd>Y</kbd>/<kbd>B</kbd> — menu (odbudowa miasta, rozmiar, zwolnione tempo).</p>
+    <p><b>Komputer:</b> klik — przechwyć mysz, <kbd>WASD</kbd> (<kbd>Shift</kbd> szybciej), LPM / PPM — lewa / prawa pięść (przytrzymaj, by uderzyć mocniej), <kbd>F</kbd> (trzymaj) — oddech, <kbd>R</kbd> — ryk, <kbd>E</kbd> — chwyć / rzuć, <kbd>T</kbd> — ogon, <kbd>M</kbd> — zwolnione tempo, <kbd>1</kbd>–<kbd>3</kbd> — rozmiar, <kbd>Enter</kbd> — odbuduj miasto, <kbd>O</kbd> — menu.</p>
+  </div>
+  <div id="hud"></div>
+  <div id="msg"></div>
+  <div id="cross"></div>
+  <div id="menu">
+    <button data-act="reset">Odbuduj miasto</button>
+    <button data-act="size">Zmień rozmiar</button>
+    <button data-act="slow">Zwolnione tempo</button>
+    <button data-act="mode:trench.html" class="alt">Okopy</button>
+    <button data-act="mode:index.html" class="alt">Artyleria</button>
+  </div>
+  <script type="module" src="./src/godzilla/main.js"></script>
+</body>
+</html>

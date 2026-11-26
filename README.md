@@ -10,6 +10,7 @@ Siedem trybów na lewitującej platformie, jeden w Twoim pokoju i jeden w okopie
 - **Bitwa średniowieczna** (`medieval.html`): miecznicy, łucznicy, włócznicy, kawaleria i katapulty; rozstawiasz i dowodzisz oddziałami albo wcielasz się w żołnierza.
 - **Kostucha** (`reaper.html`): horror w Mixed Reality na zeskanowanym pokoju. Z Twoich drzwi wychodzi kostucha i powoli idzie do Ciebie.
 - **Obrona okopów** (`trench.html`): stoisz w okopie ze swoją drużyną i odpierasz kolejne fale wroga; amunicja się kończy, a magazynki noszone są w kieszeniach.
+- **Godzilla** (`godzilla.html`): jesteś potworem wysokości ok. 95 m i rozbijasz miasto, a budynki rozpadają się stopniowo, zależnie od siły i miejsca uderzenia.
 
 Między trybami przełączasz się przyciskiem na stronie albo w menu w VR.
 
@@ -519,6 +520,41 @@ przyrządy, `1`–`4` — karabin/pistolet/granat/nóż, `R` — przeładuj z ki
 albo uzupełnij w arsenale / zabierz poległemu / podnieś, `F` — przyciągnij wskazany przedmiot (trafia do kieszeni),
 `T` — artyleria (cel celownikiem, LPM — ogień), `N` — wezwij falę, `Spacja` — drabinka, `Enter` — start/pauza, `O` — menu.
 
+## Tryb: Godzilla
+
+Widok 1:1 w skali potwora (rig jest powiększony ok. 60×, więc miasto wygląda jak makieta pod stopami, a zawalenia
+trwają tyle, ile trwałyby naprawdę). Wychodzisz z zatoki do miasta z ok. 120 budynków: kamienice z cegły, biurowce
+z betonu i szklane wieżowce w śródmieściu, plus zaparkowane auta.
+
+**Jak rozpadają się budynki.** Każdy budynek składa się z segmentów (jedno piętro × 4 m × 4 m). Segment ma strop,
+słupy, ściankę działową i — na zewnątrz — płyty fasady (okna, okładzinę, dach). Uszkodzenia są liczone, a nie
+odgrywane z gotowej animacji:
+- **siła ciosu** = prędkość ręki² (lub ogona, tułowia, rzuconego przedmiotu). Lekkie pchnięcie tylko zbija szyby
+  i rysuje okładzinę (płyty fasady pękają, potem odpadają), średni cios wybija segment, mocny przebija się w głąb;
+- **energia rozchodzi się po konstrukcji** — najwięcej w kierunku ciosu, mniej na boki. To, czego nie zniszczy,
+  zostaje jako pęknięcia (ciemniejsze segmenty), więc kolejne ciosy w to samo miejsce kruszą coraz łatwiej;
+- **podparcie**: po każdej zmianie liczona jest ścieżka obciążenia do gruntu. Wspornik ma ograniczony zasięg
+  (kamienica 1 segment, biurowiec 2, wieżowiec 3). Co traci podparcie, odpada jako **bryła sztywna** — spada,
+  obraca się, odbija i przechyla na resztkach konstrukcji;
+- **spadająca bryła miażdży** to, na co spadnie (energia zależy od jej masy i prędkości uderzenia), a sama też się
+  kruszy — dlatego oderwana góra wieżowca przebija kolejne piętra (zawalenie piętro po piętrze);
+- **przeciążenie**: ciężar pięter nad brakującymi segmentami przechodzi na sąsiednie słupy. Nadwyrężone
+  i przeciążone segmenty pękają po chwili (słychać trzeszczenie), więc podcięty z jednej strony budynek łamie się
+  stopniowo i przechyla w stronę zniszczeń;
+- gruz, odłamki szkła, płyty stropów i pył lecą zgodnie z kierunkiem ciosu, a gruz układa się w hałdy.
+
+**Sterowanie VR:** pazury biją, gdy w coś trafisz (siła z szybkości ruchu ręki); **chwyt (grip)** przy budynku wyrywa
+segment, przy aucie albo dużym kawałku gruzu — łapie go; puszczony w ruchu przedmiot leci i uderza w budynki;
+**spust** — oddech atomowy (tam, gdzie patrzysz; rozgrzewa i rozsadza segmenty, ok. 6 s, potem odpoczynek);
+**A/X** — ryk (pękają szyby w okolicy); lewa gałka — chód (stopy depczą auta i to, co pod nimi), prawa — obrót,
+klik prawej gałki — zamach ogonem, ogon zahacza o budynki także przy skrętach; **Y/B** — menu: odbudowa miasta,
+rozmiar potwora (55 / 95 / 145 m), zwolnione tempo. Na lewym nadgarstku: procent zniszczeń, zburzone budynki,
+siła ostatniego i najmocniejszego ciosu, zapas oddechu.
+
+**Na komputerze:** `WASD` (`Shift` szybciej), mysz — rozglądanie, LPM / PPM — lewa / prawa pięść (przytrzymaj, by
+uderzyć mocniej), `F` (trzymaj) — oddech, `R` — ryk, `E` — chwyć / rzuć, `T` — ogon, `M` — zwolnione tempo,
+`1`–`3` — rozmiar, `Enter` — odbuduj miasto, `O` — menu.
+
 ## Parametry URL
 - `?seed=42`: inny losowy teren (las, kolory, ukształtowanie).
 - `?shadows=0`: wyłącza cienie, jeśli brakuje płynności.
@@ -556,6 +592,7 @@ albo uzupełnij w arsenale / zabierz poległemu / podnieś, `F` — przyciągnij
   - Tunel ze światłem.
   - Miejsce sądu z wagą, niebo i piekło (`judgement.js`).
   - Dźwięki proceduralne i przebieg sceny.
+- `src/godzilla/city.js` (miasto, segmenty, uderzenia, podparcie i obciążenia), `src/godzilla/physics.js` (gruz, bryły sztywne, pył), `src/godzilla/kaiju.js` (ciało, ogon, oddech), `src/godzilla/audio.js`, `src/godzilla/main.js`: tryb Godzilla.
 - `src/trench/world.js`, `src/trench/soldiers.js`, `src/trench/gear.js`, `src/trench/smoke.js` (zasłony dymne), `src/trench/audio.js`, `src/trench/main.js`: tryb Obrona okopów.
   - Mapa okopów na siatce 1 m (stanowiska, łączniki, ziemianka), teren z lejami i drutem, linia wzroku i A*.
   - Żołnierze z części instancjonowanych, AI natarcia, walki w okopie i zaopatrzenia.

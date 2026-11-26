@@ -146,7 +146,7 @@ class Menu extends CanvasPanel {
     btn(30, y, 660, 64, o.phase === 'idle' || o.phase === 'dead' ? '▶ START (nowa gra)' : o.paused ? '▶ Wznów' : '❚❚ Pauza', 'run', '#3a6a2a'); y += 78;
     btn(30, y, 320, 60, 'Od nowa', 'restart', '#6a2a22'); btn(370, y, 320, 60, 'Dopasuj wzrost', 'calib', '#5a4a1a'); y += 74;
     btn(30, y, 320, 60, '⚑ Wezwij falę teraz', 'wave', '#7a4a12'); btn(370, y, 320, 60, o.auto ? 'Fale: automatyczne' : 'Fale: na żądanie', 'auto', '#4a3a5a'); y += 74;
-    btn(30, y, 210, 56, 'Artyleria', 'mode:index.html', '#2a3a5a'); btn(255, y, 210, 56, 'Bitwa średniow.', 'mode:medieval.html', '#2a3a5a'); btn(480, y, 210, 56, 'Kostucha', 'mode:reaper.html', '#2a3a5a'); y += 70;
+    btn(30, y, 152, 56, 'Artyleria', 'mode:index.html', '#2a3a5a'); btn(199, y, 152, 56, 'Średniow.', 'mode:medieval.html', '#2a3a5a'); btn(368, y, 152, 56, 'Kostucha', 'mode:reaper.html', '#2a3a5a'); btn(537, y, 152, 56, 'Godzilla', 'mode:godzilla.html', '#1a3a5a'); y += 70;
     btn(30, y, 660, 56, 'Zamknij menu', 'close'); y += 80;
     c.font = '21px system-ui'; c.fillStyle = '#f4ead8';
     ['Chwyt (grip): weź broń z kabury / magazynek z kieszeni / z arsenału.', 'Spust: strzał · granat: spust = zawleczka, puść chwyt = rzut.', 'A / X: wyrzuć magazynek · włóż nowy, przykładając go do broni.', 'Puść magazynek przy kieszeni na pasie — schowasz go.', 'Pusta ręka + spust: najbliższy przedmiot (wskazany) leci do dłoni.', 'Drabinka: idź w jej stronę albo chwyć szczebel — wyjście z okopu.', 'Wciśnij gałkę: artyleria — wskaż cel, spust = ogień.', 'Minigun: chwyć uchwyty z tyłu, spust = ogień, uważaj na temperaturę.', 'Kucnij, by schować się za workami. Lewa gałka: chód, prawa: obrót.'].forEach((l, i) => c.fillText(l, 30, y + i * 30));
