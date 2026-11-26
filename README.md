@@ -471,16 +471,25 @@ poprzednia trwa; przełącznik „Fale: automatyczne / na żądanie” wyłącza
 Część atakujących niesie **granaty dymne**: z 30–95 m od okopu rzucają je przed siebie i biegną za zasłoną. Dym
 (chmura ok. 15 m, ~40 s, znosi go wiatr) zasłania widok Tobie i obrońcom, a wrogom za nim — Ciebie.
 
-**Wsparcie artylerii** (raz na minutę): wskaż cel na przedpolu, a po ~2 s spada salwa 9 pocisków w promieniu 9 m
+**Wsparcie artylerii** (raz na minutę; wciśnięcie gałki dowolnego kontrolera albo przycisk „Artyleria” w menu): wskaż cel na przedpolu, a po ~2 s spada salwa 9 pocisków w promieniu 9 m
 (świst nadlatujących pocisków, potężne wybuchy). Celu nie da się wskazać tuż przed własnym okopem.
 
 **Okop:** stanowiska strzeleckie przy przedpiersiu z workami — stojąc, widzisz i strzelasz ponad workami, a gdy
 **kucniesz**, chowasz się (wróg widzi tylko to, co wystaje). Łączniki i okop wspierający są głębsze — głowa jest
 poniżej gruntu. Wysokość dopasowuje się sama do Twojego wzrostu po wejściu w VR (w menu: „Dopasuj wzrost”).
 
-**Broń:**
+**Broń** jest przedmiotem: puszczona przy kaburze / na plecach chowa się, a puszczona gdziekolwiek indziej upada na
+ziemię (można ją podnieść chwytem albo przyciągnąć spustem pustej ręki). Chwyt drugą dłonią na broni trzymanej w pierwszej
+przekłada ją do tej dłoni (chwyt na łożu broni długiej = trzymanie oburącz). Broń główna (do wyboru w menu, pozostałe leżą
+na stole w ziemiance; można też zabrać broń poległego):
+- **karabin** (seria, kolimator), **snajperka** (5 naboi, zamek po każdym strzale, luneta 12× — w goglach na tylnej
+  soczewce widać powiększony obraz z krzyżem), **granatnik** (pocisk po łuku, wybuch przy uderzeniu; ładuje się pojedynczo
+  — wyrzuć łuskę A/X i włóż nowy nabój do komory).
+Sojusznicy i wrogowie też mają różną broń: strzelcy wyborowi wroga zatrzymują się 85–135 m od okopu i strzelają z daleka,
+grenadierzy (od 2. fali) ostrzeliwują okopy granatami. Amunicja do każdej broni jest osobna (5 skrzyń w arsenale, łup z
+poległych zależy od ich broni).
 - karabin automatyczny (30 naboi, licznik naboi na boku) z **kolimatorem**: czerwona kropka w pierścieniu jest widoczna
-  tylko, gdy patrzysz przez okienko wzdłuż lufy — i wtedy wskazuje dokładnie miejsce trafienia,
+  temu oku, które patrzy przez okienko wzdłuż lufy (każde oko liczone osobno) — i wtedy wskazuje dokładnie miejsce trafienia,
 - pistolet (12 naboi),
 - granaty (zapalnik 3,6 s),
 - nóż (trafienie ostrzem w ruchu),
@@ -518,7 +527,7 @@ sekundach bez trafień. Kule przelatujące obok świszczą.
 **Na komputerze:** klik — przechwyć mysz, `WASD` (`Shift` bieg), `C` — kucnij, LPM — strzał, PPM — celowanie przez
 przyrządy, `1`–`4` — karabin/pistolet/granat/nóż, `R` — przeładuj z kieszeni, `G` — granat, `E` — minigun (wejdź/zejdź)
 albo uzupełnij w arsenale / zabierz poległemu / podnieś, `F` — przyciągnij wskazany przedmiot (trafia do kieszeni),
-`T` — artyleria (cel celownikiem, LPM — ogień), `N` — wezwij falę, `Spacja` — drabinka, `Enter` — start/pauza, `O` — menu.
+`T` — artyleria (cel celownikiem, LPM — ogień), `Q` — upuść broń, `E` przy leżącej broni — weź ją (zamiana), `N` — wezwij falę, `Spacja` — drabinka, `Enter` — start/pauza, `O` — menu.
 
 ## Tryb: Godzilla
 
@@ -550,6 +559,12 @@ segment, przy aucie albo dużym kawałku gruzu — łapie go; puszczony w ruchu 
 klik prawej gałki — zamach ogonem, ogon zahacza o budynki także przy skrętach; **Y/B** — menu: odbudowa miasta,
 rozmiar potwora (55 / 95 / 145 m), zwolnione tempo. Na lewym nadgarstku: procent zniszczeń, zburzone budynki,
 siła ostatniego i najmocniejszego ciosu, zapas oddechu.
+
+**Walka z robotem** (menu → „Walka z robotem”, na komputerze `B`): nadchodzi robot podobnej wielkości i boksuje —
+proste, sierpowe i podbródkowe, czasem kombinacja; robi gardę, gdy widzi nadlatującą pięść. Twoje ciosy liczą się
+z szybkości ręki (głowa ×1,5, garda pochłania większość), trafiony robot się zatacza i bywa odrzucony na budynki.
+Jego ciosy zablokujesz dłonią przed twarzą; trafienie czerwieni obraz i odpycha cię do tyłu. Robot depcze i taranuje
+miasto, a po nokaucie wali się na budynki. Oddech atomowy i rzucone przedmioty też go ranią.
 
 **Na komputerze:** `WASD` (`Shift` szybciej), mysz — rozglądanie, LPM / PPM — lewa / prawa pięść (przytrzymaj, by
 uderzyć mocniej), `F` (trzymaj) — oddech, `R` — ryk, `E` — chwyć / rzuć, `T` — ogon, `M` — zwolnione tempo,
@@ -592,7 +607,7 @@ uderzyć mocniej), `F` (trzymaj) — oddech, `R` — ryk, `E` — chwyć / rzuć
   - Tunel ze światłem.
   - Miejsce sądu z wagą, niebo i piekło (`judgement.js`).
   - Dźwięki proceduralne i przebieg sceny.
-- `src/godzilla/city.js` (miasto, segmenty, uderzenia, podparcie i obciążenia), `src/godzilla/physics.js` (gruz, bryły sztywne, pył), `src/godzilla/kaiju.js` (ciało, ogon, oddech), `src/godzilla/audio.js`, `src/godzilla/main.js`: tryb Godzilla.
+- `src/godzilla/city.js` (miasto, segmenty, uderzenia, podparcie i obciążenia), `src/godzilla/physics.js` (gruz, bryły sztywne, pył), `src/godzilla/kaiju.js` (ciało, ogon, oddech), `src/godzilla/robot.js` (robot-bokser), `src/godzilla/audio.js`, `src/godzilla/main.js`: tryb Godzilla.
 - `src/trench/world.js`, `src/trench/soldiers.js`, `src/trench/gear.js`, `src/trench/smoke.js` (zasłony dymne), `src/trench/audio.js`, `src/trench/main.js`: tryb Obrona okopów.
   - Mapa okopów na siatce 1 m (stanowiska, łączniki, ziemianka), teren z lejami i drutem, linia wzroku i A*.
   - Żołnierze z części instancjonowanych, AI natarcia, walki w okopie i zaopatrzenia.

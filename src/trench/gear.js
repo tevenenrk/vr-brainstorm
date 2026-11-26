@@ -12,10 +12,13 @@ const bx = (w, h, d, x, y, z, m = STEEL) => { const o = new THREE.Mesh(new THREE
 const cyl = (r, l, x, y, z, m = STEEL, seg = 10) => { const o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, l, seg).rotateX(Math.PI / 2), m); o.position.set(x, y, z); return o; };
 
 export const GUNS = {
-  rifle: { name: 'Karabin', mag: 30, auto: true, rate: 11, dmg: [36, 48], head: 100, spread: 0.0012, recoil: 0.012, muzzle: new THREE.Vector3(0, 0.045, -0.66), well: new THREE.Vector3(0, -0.03, -0.12), fore: new THREE.Vector3(0, 0.0, -0.34), sound: 'rifle' },
-  pistol: { name: 'Pistolet', mag: 12, auto: false, rate: 6, dmg: [28, 38], head: 100, spread: 0.003, recoil: 0.03, muzzle: new THREE.Vector3(0, 0.065, -0.17), well: new THREE.Vector3(0, -0.085, 0.015), sound: 'pistol' },
+  rifle: { name: 'Karabin', ammo: 'rifle', mag: 30, auto: true, rate: 11, dmg: [36, 48], head: 100, spread: 0.0012, recoil: 0.012, muzzle: new THREE.Vector3(0, 0.045, -0.66), well: new THREE.Vector3(0, -0.03, -0.12), fore: new THREE.Vector3(0, 0.0, -0.34), sound: 'rifle' },
+  sniper: { name: 'Snajperka', ammo: 'sniper', mag: 5, auto: false, rate: 0.9, dmg: [110, 140], head: 200, spread: 0.0002, recoil: 0.07, muzzle: new THREE.Vector3(0, 0.045, -0.98), well: new THREE.Vector3(0, -0.03, -0.1), fore: new THREE.Vector3(0, 0.0, -0.42), scope: new THREE.Vector3(0, 0.105, -0.06), sound: 'sniper' },
+  launcher: { name: 'Granatnik', ammo: 'gl', mag: 1, auto: false, rate: 1.2, projectile: true, speed: 48, spread: 0.004, recoil: 0.09, muzzle: new THREE.Vector3(0, 0.03, -0.56), well: new THREE.Vector3(0, 0.07, -0.02), fore: new THREE.Vector3(0, -0.04, -0.3), sound: 'gl' },
+  pistol: { name: 'Pistolet', ammo: 'pistol', mag: 12, auto: false, rate: 6, dmg: [28, 38], head: 100, spread: 0.003, recoil: 0.03, muzzle: new THREE.Vector3(0, 0.065, -0.17), well: new THREE.Vector3(0, -0.085, 0.015), sound: 'pistol' },
 };
-export const POUCH_CAP = { rifle: 4, pistol: 3, grenade: 3 };
+export const POUCH_CAP = { primary: 4, pistol: 3, grenade: 3 };
+export const AMMO_NAME = { rifle: 'karabin', sniper: 'snajperka', gl: 'granatnik', pistol: 'pistolet' };
 
 export function magMesh(type) {
   const g = new THREE.Group();
@@ -23,6 +26,10 @@ export function magMesh(type) {
     const a = bx(0.026, 0.1, 0.06, 0, -0.05, 0, DARK), b = bx(0.026, 0.09, 0.058, 0, -0.135, -0.012, DARK);
     b.rotation.x = 0.25; g.add(a, b);
     g.add(bx(0.018, 0.012, 0.045, 0, 0.004, 0, BRASS));
+  } else if (type === 'sniper') { g.add(bx(0.024, 0.075, 0.075, 0, -0.037, 0, DARK), bx(0.016, 0.012, 0.06, 0, 0.004, 0, BRASS));
+  } else if (type === 'gl') {
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.07, 10).translate(0, -0.035, 0), BRASS));
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(0.02, 10, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2).translate(0, -0.07, 0), OLIVE));
   } else { g.add(bx(0.02, 0.11, 0.03, 0, -0.055, 0, DARK), bx(0.024, 0.012, 0.034, 0, -0.113, 0, DARK)); g.add(bx(0.012, 0.01, 0.022, 0, 0.003, 0, BRASS)); }
   g.userData.top = new THREE.Vector3();
   return g;
@@ -57,6 +64,36 @@ export function rifleMesh() {
   g.userData.counter = cnt; g.userData.sight = frame.position.clone(); g.userData.sightR = 0.02;
   return g;
 }
+export function sniperMesh() {
+  const g = new THREE.Group();
+  const grip = bx(0.03, 0.1, 0.04, 0, -0.04, 0.02, WOODM); grip.rotation.x = -0.35; g.add(grip);
+  g.add(bx(0.05, 0.07, 0.36, 0, 0.03, -0.12, WOODM), bx(0.045, 0.06, 0.3, 0, 0.025, -0.44, WOODM), cyl(0.012, 0.6, 0, 0.045, -0.7), cyl(0.017, 0.06, 0, 0.045, -0.98, DARK));
+  g.add(bx(0.045, 0.1, 0.3, 0, 0.0, 0.2, WOODM), bx(0.05, 0.11, 0.03, 0, -0.01, 0.35, DARK));
+  // zamek z rączką
+  g.add(bx(0.04, 0.04, 0.16, 0, 0.065, -0.04, STEEL)); const bolt = cyl(0.007, 0.05, 0.035, 0.06, 0.0, STEEL); bolt.rotation.set(0, Math.PI / 2, 0); g.add(bolt);
+  // luneta: obudowa + soczewka tylna (obraz z kamery lunety) i przednia
+  g.add(bx(0.012, 0.02, 0.012, 0, 0.083, -0.1, DARK), bx(0.012, 0.02, 0.012, 0, 0.083, 0.02, DARK));
+  const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.26, 14, 1, true).rotateX(Math.PI / 2), DARK); tube.position.set(0, 0.105, -0.07); g.add(tube);
+  g.add(cyl(0.027, 0.06, 0, 0.105, -0.2, DARK, 14), cyl(0.025, 0.04, 0, 0.105, 0.065, DARK, 14));
+  const lens = new THREE.Mesh(new THREE.CircleGeometry(0.021, 20), new THREE.MeshBasicMaterial({ color: 0x223040 })); lens.position.set(0, 0.105, 0.086); g.add(lens);
+  const front = new THREE.Mesh(new THREE.CircleGeometry(0.025, 16), new THREE.MeshBasicMaterial({ color: 0x5a7890 })); front.position.set(0, 0.105, -0.231); front.rotation.y = Math.PI; g.add(front);
+  const cnt = counterPanel(); cnt.position.set(-0.026, 0.04, -0.15); cnt.rotation.y = -Math.PI / 2; g.add(cnt);
+  g.userData.counter = cnt; g.userData.lens = lens;
+  return g;
+}
+export function launcherMesh() {
+  const g = new THREE.Group();
+  const grip = bx(0.03, 0.1, 0.04, 0, -0.045, 0.01, DARK); grip.rotation.x = -0.25; g.add(grip);
+  const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.62, 14, 1, true).rotateX(Math.PI / 2), OLIVE); tube.position.set(0, 0.03, -0.25); g.add(tube);
+  g.add(cyl(0.05, 0.04, 0, 0.03, -0.54, DARK, 14), cyl(0.05, 0.04, 0, 0.03, 0.04, DARK, 14));
+  const fg = bx(0.03, 0.09, 0.04, 0, -0.04, -0.3, DARK); fg.rotation.x = 0.1; g.add(fg);
+  g.add(bx(0.04, 0.06, 0.22, 0, 0.0, 0.16, DARK), bx(0.045, 0.09, 0.03, 0, -0.01, 0.27, DARK));
+  // celownik ramkowy
+  g.add(bx(0.03, 0.05, 0.004, 0, 0.1, -0.12, DARK), bx(0.006, 0.02, 0.006, 0, 0.088, -0.45, DARK));
+  const cnt = counterPanel(); cnt.position.set(-0.05, 0.03, -0.1); cnt.rotation.y = -Math.PI / 2; g.add(cnt);
+  g.userData.counter = cnt;
+  return g;
+}
 export function pistolMesh() {
   const g = new THREE.Group();
   const grip = bx(0.028, 0.11, 0.04, 0, -0.03, 0.01, DARK); grip.rotation.x = -0.22; g.add(grip);
@@ -79,7 +116,7 @@ export class Items {
     this.onBounce = null; this.onExplode = null;
   }
   add(kind, type, pos, vel, extra = {}) {
-    const mesh = kind === 'grenade' ? grenadeMesh() : magMesh(type);
+    const mesh = extra.mesh || (kind === 'grenade' ? grenadeMesh() : magMesh(type));
     mesh.position.copy(pos);
     this.parent.add(mesh);
     const it = { kind, type, mesh, pos: mesh.position, vel: vel ? vel.clone() : new THREE.Vector3(), held: null, rest: false, rounds: extra.rounds ?? (kind === 'mag' ? GUNS[type].mag : 0), armed: !!extra.armed, fuse: extra.fuse ?? 3.6, spin: new THREE.Vector3(Math.random(), Math.random(), Math.random()).normalize(), age: 0, ...extra };
@@ -103,7 +140,7 @@ export class Items {
         if (it.fuse <= 0) { const p = it.pos.clone(); if (it.drop) it.drop(it); this.remove(it); if (this.onExplode) this.onExplode(p, it); continue; }
       }
       if (it.held || it.pull) continue;
-      if (!it.armed && it.age > 120) { this.remove(it); continue; }
+      if (!it.armed && !it.persist && it.age > 120) { this.remove(it); continue; }
       if (it.rest) continue;
       it.vel.y -= 9.81 * dt;
       const steps = Math.max(1, Math.ceil(it.vel.length() * dt / 0.05)), h = dt / steps;

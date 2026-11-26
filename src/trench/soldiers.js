@@ -9,6 +9,8 @@ const rnd = (a, b) => a + Math.random() * (b - a);
 const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 const CAP = 180;
 export const MAG = 30;
+// broń żołnierzy: pojemność magazynka, zapas, typ amunicji (łup)
+export const KIT = { rifle: { mag: 30, spare: [3, 4], ammo: 'rifle' }, sniper: { mag: 5, spare: [4, 5], ammo: 'sniper' }, launcher: { mag: 1, spare: [6, 6], ammo: 'gl' } };
 export const COLORS = [new THREE.Color(0.56, 0.52, 0.34), new THREE.Color(0.44, 0.47, 0.45)];
 
 const tint = (g, r, gg = r, b = r) => { g = g.index ? g.toNonIndexed() : g; const n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a[i * 3] = r; a[i * 3 + 1] = gg; a[i * 3 + 2] = b; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); if (g.attributes.uv) g.deleteAttribute('uv'); return g; };
@@ -33,9 +35,16 @@ function armsAimGeo() {
   const arm = (x0, y0, z0, x1, y1, z1) => { const a = new THREE.Vector3(x0, y0, z0), b = new THREE.Vector3(x1, y1, z1), L = a.distanceTo(b); const g = new THREE.BoxGeometry(0.1, 0.1, L).translate(0, 0, L / 2); g.lookAt(b.clone().sub(a)); return tint(g.translate(a.x, a.y, a.z), 1); };
   return mergeGeometries([...r, arm(0.21, 0, 0, 0.1, -0.08, 0.2), arm(0.1, -0.08, 0.2, 0.08, -0.08, 0.22), arm(-0.21, 0, 0, -0.08, -0.12, 0.3), arm(-0.08, -0.12, 0.3, 0.06, -0.06, 0.5)]);
 }
-function armsCarryGeo() {
+// dodatki na broni: luneta snajperki / tuba granatnika (w układzie karabinu z rifleGeo)
+function kitGeo(type) {
+  if (type === 'sniper') return mergeGeometries([tint(new THREE.CylinderGeometry(0.022, 0.022, 0.26, 8).rotateX(Math.PI / 2).translate(0, 0.075, 0.2), 0.12, 0.12, 0.13), box(0.02, 0.02, 0.35, 0, 0.03, 1.05, STEEL)]);
+  return mergeGeometries([tint(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 10).rotateX(Math.PI / 2).translate(0, 0.02, 0.62), 0.22, 0.25, 0.2), box(0.03, 0.06, 0.05, 0, 0.09, 0.4, STEEL)]);
+}
+function kitAimGeo(type) { return kitGeo(type).translate(0.08, -0.02, 0.2); }
+function kitCarryGeo(type) { const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.9, 0.5, 0.35)); return kitGeo(type).applyQuaternion(q).translate(0.02, -0.3, 0.2); }
+function armsCarryGeo(bare) {
   const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.9, 0.5, 0.35));
-  const r = rifleGeo().map((g) => g.clone().applyQuaternion(q).translate(0.02, -0.3, 0.2));
+  const r = bare ? [] : rifleGeo().map((g) => g.clone().applyQuaternion(q).translate(0.02, -0.3, 0.2));
   const arm = (x0, y0, z0, x1, y1, z1) => { const a = new THREE.Vector3(x0, y0, z0), b = new THREE.Vector3(x1, y1, z1), L = a.distanceTo(b); const g = new THREE.BoxGeometry(0.1, 0.1, L).translate(0, 0, L / 2); g.lookAt(b.clone().sub(a)); return tint(g.translate(a.x, a.y, a.z), 1); };
   return mergeGeometries([...r, arm(0.22, 0, 0, 0.24, -0.3, 0.08), arm(0.24, -0.3, 0.08, 0.1, -0.38, 0.2), arm(-0.22, 0, 0, -0.22, -0.28, 0.1), arm(-0.22, -0.28, 0.1, -0.05, -0.18, 0.3)]);
 }
@@ -46,7 +55,8 @@ export class Troops {
     this.soldiers = []; this.tracers = [];
     const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
     const mk = (g) => { const m = new THREE.InstancedMesh(g, mat, CAP); m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.setColorAt(0, new THREE.Color()); m.frustumCulled = false; m.count = 0; m.castShadow = true; parent.add(m); return m; };
-    this.parts = { legL: mk(legGeo()), legR: mk(legGeo()), torso: mk(torsoGeo()), head: mk(headGeo()), helm0: mk(helmetGeo(0)), helm1: mk(helmetGeo(1)), aim: mk(armsAimGeo()), carry: mk(armsCarryGeo()) };
+    this.parts = { legL: mk(legGeo()), legR: mk(legGeo()), torso: mk(torsoGeo()), head: mk(headGeo()), helm0: mk(helmetGeo(0)), helm1: mk(helmetGeo(1)), aim: mk(armsAimGeo()), carry: mk(armsCarryGeo()), bare: mk(armsCarryGeo(true)),
+      snA: mk(kitAimGeo('sniper')), snC: mk(kitCarryGeo('sniper')), glA: mk(kitAimGeo('launcher')), glC: mk(kitCarryGeo('launcher')) };
     const tg = new THREE.BufferGeometry();
     tg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(400 * 6), 3).setUsage(THREE.DynamicDrawUsage));
     tg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(400 * 6), 3).setUsage(THREE.DynamicDrawUsage));
@@ -58,7 +68,7 @@ export class Troops {
     this.tracerGlow.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.tracerGlow.setColorAt(0, new THREE.Color()); this.tracerGlow.frustumCulled = false; this.tracerGlow.count = 0;
     parent.add(this.tracerGlow);
     // zdarzenia dla dźwięku i efektów
-    this.onSmoke = null; this.smoke = null;      // zasłony dymne: { blocks(a, b) }
+    this.onSmoke = null; this.onLaunch = null; this.smoke = null;      // zasłony dymne: { blocks(a, b) }
     this.onShot = null; this.onDeath = null; this.onPlayerHit = null; this.onNearMiss = null; this.onThrow = null; this.onImpact = null; this.onMelee = null; this.onResupply = null;
     this.arsenal = null;      // { rifle } — zapas magazynków
     this._m = new THREE.Matrix4(); this._m2 = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._p = new THREE.Vector3(); this._s = new THREE.Vector3(1, 1, 1); this._v = new THREE.Vector3(); this._up = new THREE.Vector3(0, 1, 0); this._c = new THREE.Color(); this._x = new THREE.Vector3(1, 0, 0);
@@ -68,7 +78,7 @@ export class Troops {
 
   add(side, x, z, extra = {}) {
     const s = { side, x, z, y: this.map.floorAt(x, z), yaw: side === 1 ? 0 : Math.PI, hp: 100, state: 'alive', stance: 0, phase: Math.random() * 6, speed: 0, aim: 0, aimPitch: 0,
-      cd: rnd(0.5, 2), look: 0, target: null, mag: MAG, spare: side ? 3 : 4, grenades: side ? (Math.random() < 0.45 ? 1 : 0) : 0, smokes: 0, reload: 0, path: null, pathT: 0, t: 0,
+      cd: rnd(0.5, 2), look: 0, target: null, mag: KIT[extra.weapon || 'rifle'].mag, spare: KIT[extra.weapon || 'rifle'].spare[side ? 0 : 1], weapon: 'rifle', grenades: side ? (Math.random() < 0.45 ? 1 : 0) : 0, smokes: 0, reload: 0, path: null, pathT: 0, t: 0,
       fall: new THREE.Vector3(1, 0, 0), mode: side ? 'advance' : 'post', moveT: 0, ...extra };
     this.soldiers.push(s);
     return s;
@@ -80,10 +90,15 @@ export class Troops {
       const b = bays[(Math.random() * bays.length) | 0];
       const s = this.add(1, x, z, { delay: k * rnd(0.3, 0.8), goal: new THREE.Vector2(rnd(b.x0 + 0.8, b.x1 - 0.8), -2.7), rush: wave > 3 && Math.random() < 0.25 });
       if (Math.random() < Math.min(0.3, 0.1 + wave * 0.03)) s.smokes = 1;
+      // strzelcy wyborowi i grenadierzy
+      const r = Math.random();
+      if (r < Math.min(0.16, 0.05 + wave * 0.025)) this.arm(s, 'sniper');
+      else if (wave >= 2 && r < Math.min(0.3, 0.16 + wave * 0.02)) this.arm(s, 'launcher');
       s.yaw = 0;
     }
   }
-  spawnAlly(post, x, z) { return this.add(0, x ?? post.x, z ?? post.y, { post }); }
+  spawnAlly(post, x, z, weapon) { const s = this.add(0, x ?? post.x, z ?? post.y, { post }); if (weapon) this.arm(s, weapon); return s; }
+  arm(s, weapon) { s.weapon = weapon; s.mag = KIT[weapon].mag; s.spare = KIT[weapon].spare[s.side ? 0 : 1]; if (weapon === 'sniper') s.holdD = rnd(85, 135); }
 
   // ---------- pozy i trafienia ----------
   pose(s) {
@@ -125,7 +140,8 @@ export class Troops {
       const dx = s.x - (from ? from.x : s.x - Math.sin(s.yaw)), dz = s.z - (from ? from.z : s.z - Math.cos(s.yaw)), d = Math.hypot(dx, dz) || 1;
       s.fall.set(dx / d, 0, dz / d);
       // łup: magazynki i granaty zostają przy ciele
-      s.loot = { mags: Math.max(s.side ? 1 : 0, s.spare + (s.mag > 12 ? 1 : 0)), grenades: s.grenades };
+      const K = KIT[s.weapon];
+      s.loot = { mags: Math.min(4, Math.max(s.side ? 1 : 0, s.spare + (s.mag > K.mag * 0.4 ? 1 : 0))), type: K.ammo, grenades: s.grenades, weapon: s.weapon };
       if (this.onDeath) this.onDeath(s, from, part);
       return true;
     }
@@ -244,7 +260,8 @@ export class Troops {
     const muzzle = this.eyePos(s, new THREE.Vector3()).add(new THREE.Vector3(Math.sin(s.yaw) * 0.7 + Math.cos(s.yaw) * 0.08, -0.08, Math.cos(s.yaw) * 0.7 - Math.sin(s.yaw) * 0.08));
     const tgt = o.isPlayer ? (o.chestVisible ? o.chest.clone() : o.head.clone()) : (s.targetVis === 2 ? this.chestPos(o, new THREE.Vector3()) : this.headPos(o, new THREE.Vector3()));
     const d = muzzle.distanceTo(tgt);
-    let p = (s.side ? 0.5 : 0.42) * 2 * (30 / (30 + d)) ** 1.4;
+    const sn = s.weapon === 'sniper';
+    let p = sn ? (s.side ? 0.62 : 0.58) * (140 / (140 + d)) ** 0.6 : (s.side ? 0.5 : 0.42) * 2 * (30 / (30 + d)) ** 1.4;
     if ((o.isPlayer && !o.chestVisible) || s.targetVis === 1) p *= 0.38;
     if (s.speed > 0.5) p *= 0.5;
     if ((o.speed || 0) > 2) p *= 0.6;
@@ -260,12 +277,13 @@ export class Troops {
       if (o.isPlayer && this.onNearMiss) this.onNearMiss(muzzle, dir, end);
       else if (tt < 300 && this.onImpact) this.onImpact(end);
     } else if (o.isPlayer) {
-      if (this.onPlayerHit) this.onPlayerHit(rnd(14, 24) * (o.chestVisible ? 1 : 1.25), s);
+      if (this.onPlayerHit) this.onPlayerHit((sn ? rnd(55, 75) : rnd(14, 24)) * (o.chestVisible ? 1 : 1.25), s);
     } else {
       const head = Math.random() < 0.15;
-      this.damage(o, head ? 100 : rnd(34, 48), s, head ? 'head' : 'body');
+      this.damage(o, head || sn ? (sn ? rnd(85, 120) : 100) : rnd(34, 48), s, head ? 'head' : 'body');
     }
-    this.tracers.push({ a: muzzle, b: end, t: 0, T: muzzle.distanceTo(end) / TRACER_V, side: s.side });
+    this.tracers.push({ a: muzzle, b: end, t: 0, T: muzzle.distanceTo(end) / (sn ? TRACER_V * 1.5 : TRACER_V), side: s.side, len: sn ? 10 : 6 });
+    if (sn) s.snipeShot = true;
     if (this.onShot) this.onShot(s, muzzle);
   }
   melee(s, o) {
@@ -283,8 +301,15 @@ export class Troops {
     const d = Math.hypot(o.x - s.x, o.z - s.z);
     if (d < 1.3) { if (s.cd <= 0) this.melee(s, o); return true; }
     if (s.reload > 0) return true;
-    if (s.mag <= 0) { if (s.spare > 0) { s.spare--; s.reload = 2.6; s.mag = MAG; } return !!canMove; }
-    if (s.cd <= 0) { s.cd = (s.side ? rnd(1.1, 2.2) : rnd(1.2, 2.2)) * (d < 25 ? 0.6 : d > 70 ? 1.4 : 1); this.shoot(s, o, player); }
+    if (s.mag <= 0) { if (s.spare > 0) { s.spare--; s.reload = s.weapon === 'launcher' ? 3 : 2.6; s.mag = KIT[s.weapon].mag; } return !!canMove; }
+    if (s.cd <= 0) {
+      if (s.weapon === 'launcher' && d > 14 && this.onLaunch) {
+        s.cd = rnd(5, 8); s.mag--; s.aim = 1; s.shotT = 0;
+        const t = o.isPlayer ? o.chest.clone() : this.chestPos(o, new THREE.Vector3());
+        this.onLaunch(s, t);
+      } else if (s.weapon === 'sniper') { s.cd = rnd(3.2, 5.5); this.shoot(s, o, player); }
+      else { s.cd = (s.side ? rnd(1.1, 2.2) : rnd(1.2, 2.2)) * (d < 25 ? 0.6 : d > 70 ? 1.4 : 1); this.shoot(s, o, player); }
+    }
     return true;
   }
 
@@ -303,6 +328,12 @@ export class Troops {
         s.smokes--; s.aim = 1;
         const k = Math.min(1, rnd(16, 26) / d);
         this.onSmoke(s, new THREE.Vector3(s.x + (g.x - s.x) * k + rnd(-4, 4), 0, s.z + (g.y - s.z) * k));
+      }
+      // strzelec wyborowy zostaje z tyłu i strzela z daleka (rusza, gdy zostanie prawie sam)
+      if (s.weapon === 'sniper' && d < s.holdD && this.alive(1).length > 3) {
+        s.speed = 0; s.stance += (1 - s.stance) * Math.min(1, dt * 5);
+        this.combat(s, dt, player, 280);
+        return;
       }
       const assault = d < 24 || s.rush;
       if (assault || s.phaseMove) {
@@ -345,8 +376,8 @@ export class Troops {
         s.speed = 0; s.waitT = (s.waitT || 0) + dt;
         if (s.waitT > 1.5) {
           s.waitT = 0;
-          const take = Math.min(4, ars ? ars.rifle : 0);
-          if (take > 0) { ars.rifle -= take; s.spare += take; if (this.onResupply) this.onResupply(s, take); s.mode = 'return'; }
+          const key = KIT[s.weapon].ammo, take = Math.min(4, ars ? ars[key] || 0 : 0);
+          if (take > 0) { ars[key] -= take; s.spare += take; if (this.onResupply) this.onResupply(s, take); s.mode = 'return'; }
           else s.mode = 'loot';
         }
       }
@@ -354,7 +385,7 @@ export class Troops {
     }
     if (s.mode === 'loot') {
       let body = null, bd = 40;
-      for (const b of this.soldiers) if (b.state === 'dead' && b.loot && b.loot.mags > 0 && this.map.inTrench(b.x, b.z)) { const d = Math.hypot(b.x - s.x, b.z - s.z); if (d < bd) { bd = d; body = b; } }
+      for (const b of this.soldiers) if (b.state === 'dead' && b.loot && b.loot.mags > 0 && b.loot.type === KIT[s.weapon].ammo && this.map.inTrench(b.x, b.z)) { const d = Math.hypot(b.x - s.x, b.z - s.z); if (d < bd) { bd = d; body = b; } }
       if (!body) { s.mode = 'return'; s.dry = true; return; }
       if (this.followPath(s, body.x, body.z, 3, dt) < 0.9) { s.spare += body.loot.mags; body.loot.mags = 0; s.mode = 'return'; s.dry = false; }
       return;
@@ -370,13 +401,14 @@ export class Troops {
     else s.speed = 0;
     const fighting = this.combat(s, dt, player, 240);
     s.stance += ((fighting && s.reload <= 0 ? 0 : 0.85) - s.stance) * Math.min(1, dt * 4);
-    if (s.mag <= 0 && s.spare <= 0 && s.reload <= 0 && !s.dry) s.mode = ars && ars.rifle > 0 ? 'resupply' : 'loot';
+    if (s.mag <= 0 && s.spare <= 0 && s.reload <= 0 && !s.dry) s.mode = ars && ars[KIT[s.weapon].ammo] > 0 ? 'resupply' : 'loot';
   }
 
   // ---------- rysowanie ----------
   render() {
     const P = this.parts, cnt = { n: 0 };
     let n = 0, h0 = 0, h1 = 0, na = 0, nc = 0;
+    const kc = { snA: 0, snC: 0, glA: 0, glC: 0 }; let nb = 0;
     const M = this._m, Mt = new THREE.Matrix4(), tmp = new THREE.Matrix4(), q = this._q, col = new THREE.Color(), skin = new THREE.Color(1, 1, 1);
     for (const s of this.soldiers) {
       if (n >= CAP || s.delay > 0) continue;
@@ -409,12 +441,16 @@ export class Troops {
       helm.setMatrixAt(hi, Mt.copy(H).multiply(tmp.makeTranslation(0, 0.06, 0))); helm.setColorAt(hi, s.side ? col.clone().multiplyScalar(0.8) : new THREE.Color(0.42, 0.42, 0.3));
       // ręce z karabinem
       const A = new THREE.Matrix4().copy(T).multiply(tmp.makeTranslation(0, 0.56, 0));
-      if (!dead && (s.aim > 0.05 || s.target)) { A.multiply(tmp.makeRotationX(-lean + (s.aimPitch || 0))); P.aim.setMatrixAt(na, A); P.aim.setColorAt(na++, col); }
-      else { P.carry.setMatrixAt(nc, A); P.carry.setColorAt(nc++, col); }
+      const kit = s.weapon === 'sniper' ? 'sn' : s.weapon === 'launcher' ? 'gl' : null;
+      if (!dead && (s.aim > 0.05 || s.target)) { A.multiply(tmp.makeRotationX(-lean + (s.aimPitch || 0))); P.aim.setMatrixAt(na, A); P.aim.setColorAt(na++, col); if (kit) { const m = P[kit + 'A']; m.setMatrixAt(kc[kit + 'A'], A); m.setColorAt(kc[kit + 'A']++, skin); } }
+      else if (dead) { P.bare.setMatrixAt(nb, A); P.bare.setColorAt(nb++, col); }
+      else { P.carry.setMatrixAt(nc, A); P.carry.setColorAt(nc++, col); if (kit) { const m = P[kit + 'C']; m.setMatrixAt(kc[kit + 'C'], A); m.setColorAt(kc[kit + 'C']++, skin); } }
       n++;
     }
     for (const k of ['legL', 'legR', 'torso', 'head']) P[k].count = n;
     P.helm0.count = h0; P.helm1.count = h1; P.aim.count = na; P.carry.count = nc;
+    for (const k in kc) P[k].count = kc[k];
+    P.bare.count = nb;
     for (const m of Object.values(P)) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
     void cnt;
     // tracery: krótki odcinek lecący wzdłuż toru

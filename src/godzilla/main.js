@@ -4,6 +4,7 @@ import { City, CW, CH, HALF, WATER_Z } from './city.js';
 import { Bodies, Dust, Clusters } from './physics.js';
 import { Kaiju } from './kaiju.js';
 import { KaijuAudio } from './audio.js';
+import { Robot } from './robot.js';
 
 const params = new URLSearchParams(location.search);
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -46,6 +47,17 @@ const dust = new Dust(scene, 420);
 const clusters = new Clusters(city);
 const kaiju = new Kaiju(rig, scene);
 const audio = new KaijuAudio(camera, scene);
+const robot = new Robot(scene);
+// czerwona winieta po ciosie robota (widoczna też w goglach)
+const vignette = (() => {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+  const c = cv.getContext('2d'), g = c.createRadialGradient(128, 128, 40, 128, 128, 128);
+  g.addColorStop(0, 'rgba(120,0,0,0)'); g.addColorStop(0.6, 'rgba(150,0,0,0.35)'); g.addColorStop(1, 'rgba(110,0,0,0.95)');
+  c.fillStyle = g; c.fillRect(0, 0, 256, 256);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, opacity: 0, depthTest: false, depthWrite: false, toneMapped: false, fog: false }));
+  m.renderOrder = 9800; m.position.set(0, 0, -0.12); camera.add(m);
+  return m;
+})();
 const CAR_COLS = [0xb03028, 0x2a4a8a, 0xd8d4c8, 0x1e1e22, 0x8a8a8e, 0xc8a030, 0x3a6a3a];
 function spawnCars() {
   cars.clear();
@@ -54,7 +66,7 @@ function spawnCars() {
 spawnCars();
 
 const stats = { hits: 0, maxE: 0, lastE: 0, lastT: 0 };
-const state = { slow: false, msg: '', msgT: 0, shake: 0, breath: 0, breathCool: 0, charging: 0, roarCool: 0, t: 0 };
+const state = { fight: false, php: 100, phurtT: 0, hurt: 0, koT: 0, slow: false, msg: '', msgT: 0, shake: 0, breath: 0, breathCool: 0, charging: 0, roarCool: 0, t: 0 };
 function msg(t, d = 3) { state.msg = t; state.msgT = d; }
 
 // ---------- zdarzenia zniszczeń: gruz, pył, dźwięk ----------
@@ -120,7 +132,8 @@ class Wrist extends CanvasPanel {
     c.font = '25px system-ui'; c.fillStyle = '#e0ecf4';
     c.fillText(`Zniszczenia: ${(s.pct * 100).toFixed(1)}% miasta`, 24, 92);
     c.fillText(`Zburzone budynki: ${s.down} / ${s.total}`, 24, 126);
-    c.fillText(`Ostatni cios: ${s.lastE}   ·   najmocniejszy: ${s.maxE}`, 24, 160);
+    if (s.fight) { c.fillStyle = s.php < 30 ? '#ff7a6a' : '#9fe8b0'; c.fillText(`Ty: ${s.php}   ·   Robot: ${s.rhp}   ·   cios: ${s.lastE}`, 24, 160); }
+    else c.fillText(`Ostatni cios: ${s.lastE}   ·   najmocniejszy: ${s.maxE}`, 24, 160);
     c.fillStyle = '#16304a'; c.fillRect(24, 180, W - 48, 20);
     c.fillStyle = s.cool ? '#ff7a5a' : '#6ab8ff'; c.fillRect(24, 180, (W - 48) * s.breath, 20);
     c.fillStyle = '#c8e0f4'; c.font = '19px system-ui'; c.fillText(s.cool ? 'Oddech: stygnie…' : 'Oddech atomowy (spust)', 24, 224);
@@ -140,7 +153,7 @@ class Menu extends CanvasPanel {
     let y = 84;
     btn(30, y, 660, 62, '↻ Odbuduj miasto', 'reset', '#2a5a3a'); y += 76;
     btn(30, y, 660, 58, `Rozmiar: ${o.size}`, 'size', '#3a3a5a'); y += 72;
-    btn(30, y, 660, 58, o.slow ? 'Zwolnione tempo: WŁ.' : 'Zwolnione tempo: wył.', 'slow', '#4a3a2a'); y += 72;
+    btn(30, y, 320, 58, o.slow ? 'Zwolnione tempo: WŁ.' : 'Zwolnione tempo: wył.', 'slow', '#4a3a2a'); btn(370, y, 320, 58, o.fight ? '🥊 Walka: zakończ' : '🥊 Walka z robotem', 'fight', '#7a2a1a'); y += 72;
     btn(30, y, 210, 56, 'Okopy', 'mode:trench.html', '#2a3a5a'); btn(255, y, 210, 56, 'Bitwa średniow.', 'mode:medieval.html', '#2a3a5a'); btn(480, y, 210, 56, 'Artyleria', 'mode:index.html', '#2a3a5a'); y += 70;
     btn(30, y, 660, 56, 'Zamknij menu', 'close'); y += 80;
     c.font = '21px system-ui'; c.fillStyle = '#eef6ff';
@@ -280,7 +293,13 @@ function updateBreath(dt) {
     if (state.breath >= 1) { state.breathCool = 4; msg('Oddech wyczerpany — chwila na odpoczynek', 2); }
     const q = camera.getWorldQuaternion(new THREE.Quaternion()), f = V().set(0, 0, -1).applyQuaternion(q), up = V().set(0, 1, 0).applyQuaternion(q);
     const from = camPos().addScaledVector(f, 0.12 * S).addScaledVector(up, -0.07 * S);
-    const hit = city.ray(from, f, 1200);
+    let hit = city.ray(from, f, 1200);
+    // robot na linii ognia
+    if (state.fight && robot.active && robot.alive) {
+      let best = Infinity;
+      for (const sp of robot.spheres(S)) { const w = sp.p.clone().sub(from), t = w.dot(f); if (t > 0 && w.lengthSq() - t * t < sp.r * sp.r && t < best) best = t; }
+      if (best < (hit ? hit.t : 1200)) { hit = null; const at = from.clone().addScaledVector(f, best); robot.hit(18 * dt, f, 'chest', S); robot.hitFlash = 0.1; if (Math.random() < dt * 20) sparks(at, 2, 0x8ac8ff); kaiju.setBeam(true, from, at, S, state.t); audio.loop('beam', 'beam', 0.7, 1); return; }
+    }
     const L = hit ? hit.t : 1200, to = from.clone().addScaledVector(f, L);
     kaiju.setBeam(true, from, to, S, state.t);
     if (hit) {
@@ -321,6 +340,7 @@ function menuAction(act) {
   if (k === 'reset') resetCity();
   else if (k === 'size') { sizeI = (sizeI + 1) % SIZES.length; setSize(); }
   else if (k === 'slow') state.slow = !state.slow;
+  else if (k === 'fight') { menu.mesh.visible = false; if (state.fight) stopFight(); else startFight(); }
   else if (k === 'close') menu.mesh.visible = false;
   else if (k === 'mode') location.href = a;
   menu.last = '';
@@ -338,6 +358,7 @@ function setSize() {
   kaiju.inited = false; msg(`Rozmiar: ${SIZES[sizeI].name}`, 2);
 }
 function resetCity() {
+  if (state.fight) stopFight();
   clusters.clear(); frags.clear(); dust.clear();
   city.reset(); spawnCars();
   stats.maxE = 0; stats.lastE = 0;
@@ -392,6 +413,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyT') tailSwing = 1;
   if (e.code === 'KeyE') { const h = handOf(1); if (h.held) { h.hist = [V().set(0, 0, -1).applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion())).multiplyScalar(110).add(V().set(0, 18, 0))]; h.vel.copy(h.hist[0]); release(h); } else grab(h); }
   if (e.code === 'KeyM') state.slow = !state.slow;
+  if (e.code === 'KeyB') { if (state.fight) stopFight(); else startFight(); }
   if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') { sizeI = +e.code.slice(5) - 1; setSize(); }
   if (e.code === 'Enter') resetCity();
   if (e.code === 'KeyO' || e.code === 'Escape') { const m = document.getElementById('menu'); m.style.display = m.style.display === 'block' ? 'none' : 'block'; }
@@ -443,13 +465,112 @@ function updateHands(dt, xr) {
   }
 }
 const bodyPrev = [V(), V()];
+
+// ---------- walka z robotem ----------
+const hitCool = [0, 0];
+let robotPrev = V();
+function startFight() {
+  state.fight = true; state.php = 100; state.koT = 0;
+  const h = camPos(), f = V().set(0, 0, -1).applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion())); f.y = 0; f.normalize();
+  const p = h.clone().addScaledVector(f, 3.6 * S); p.y = 0;
+  robot.spawn(p, Math.atan2(f.x, f.z), S); robotPrev.copy(p);
+  msg('Robot nadchodzi! Gardę w górę — bij pięściami, blokuj dłońmi', 3.5);
+  audio.play('roar', p, 0.8, 1.6, 120);
+}
+function stopFight() { state.fight = false; robot.hide(); msg('Walka zakończona', 2); }
+function sparks(p, n, col = 0xffb040) { for (let k = 0; k < n; k++) frags.spawn({ p, v: V().set(rnd(-1, 1), rnd(-0.2, 1), rnd(-1, 1)).multiplyScalar(rnd(10, 30)), s: [0.6, 0.6, 0.6], color: col, kind: 2, life: rnd(0.4, 0.9) }); }
+function playerHurt(d, dir) {
+  if (state.php <= 0) return;
+  state.php = Math.max(0, state.php - d); state.phurtT = 3; state.hurt = Math.min(1, state.hurt + 0.3 + d / 30);
+  // odrzut gracza
+  const k = Math.min(0.25, 0.04 + d / 80) * S; rig.position.x += dir.x * k; rig.position.z += dir.z * k;
+  for (const h of hands) pulse(h, 1, 120 + d * 6);
+  state.shake = Math.max(state.shake, 0.5);
+  if (state.php <= 0) { msg('Robot cię znokautował! Rewanż za chwilę…', 4); state.koT = 4; robot.punch = null; }
+}
+function fightUpdate(dt) {
+  if (!state.fight || !robot.active) return;
+  const head = camPos();
+  robot.update(state.php > 0 ? dt : 0.0001, S, head, hands.map((h) => ({ p: h.world, v: h.vel })));
+  // robot taranuje budynki ciałem i pięściami
+  const rp = robot.root.position, rv = rp.clone().sub(robotPrev).divideScalar(Math.max(dt, 1e-3)); robotPrev.copy(rp);
+  if (rv.length() < 300) robot.colliders(S).forEach((c, k) => hitCity('rb' + k, c.p, c.r, rv, 'body'));
+  const fists = robot.fists();
+  fists.forEach((f, k) => { if (f.striking) hitCity('rf' + k, f.p, 0.08 * S, f.v, 'hand'); });
+  // cios robota w gracza: blok dłonią albo trafienie w głowę/tułów
+  const P = robot.punch;
+  if (P && P.phase === 'strike' && !P.done && state.php > 0) {
+    const fp = P.arm.fist.getWorldPosition(V()), dir = P.arm.vel.clone().setY(0).normalize();
+    const block = hands.find((h) => h.world.distanceTo(fp) < 0.17 * S);
+    const chest = head.clone().add(V().set(0, -0.42 * S, 0));
+    if (block) {
+      P.done = true; P.phase = 'back'; P.t = 0;
+      audio.play('metal', fp, 1.2, 0.6, 60); sparks(fp, 4, 0xffe0a0); pulse(block, 0.9, 90);
+      playerHurt(1.5, dir); robot.stun = 0.25;
+    } else if (fp.distanceTo(head) < 0.16 * S || fp.distanceTo(chest) < 0.24 * S) {
+      P.done = true;
+      const dmg = { jab: 8, hook: 12, upper: 14 }[P.type] * (fp.distanceTo(head) < 0.16 * S ? 1.3 : 1);
+      audio.play('thud', head, 1.3, 1.3, 40); audio.play('metal', fp, 0.9, 0.5, 40);
+      playerHurt(dmg, dir);
+    }
+  }
+  // regeneracja, nokauty, rewanż
+  state.phurtT -= dt; if (state.phurtT <= 0 && state.php > 0) state.php = Math.min(100, state.php + 3 * dt);
+  if (state.koT > 0) { state.koT -= dt; if (state.koT <= 0) { state.php = 100; robot.hp = Math.max(robot.hp, 90); robot.vel.addScaledVector(rp.clone().sub(head).setY(0).normalize(), 1.2 * S); msg('Rewanż! Do boju', 2); } }
+  if (!robot.alive && robot.landed && !state.wonT) { state.wonT = 7; }
+  if (state.wonT > 0) { state.wonT -= dt; if (state.wonT <= 0) { state.wonT = 0; robot.hide(); startFight(); } }
+}
+robot.onStep = (p) => {
+  const hits = city.sphere(p.clone().setY(0.08 * S), 0.11 * S, []);
+  for (let j = 0; j < hits.length; j += 5) city.impact(hits[j], 140, V().set(0, -1, 0), 'hit');
+  cars.push(p, 0.15 * S, V().set(0, 3, 0), 0.4);
+  audio.play('thud', p, 1, rnd(1.1, 1.3), 100, 0.12);
+  dust.spawn(p.clone().setY(2), V().set(rnd(-4, 4), 1, rnd(-4, 4)), 3, 12, 2.5, 0.66, 0.4);
+};
+robot.onSwing = () => audio.play('woosh', robot.root.position.clone().setY(1.3 * S), 0.9, 0.6, 80);
+robot.onLand = () => {
+  // nokaut: robot wali się na budynki
+  const rp = robot.root.position, d = robot.fallDir;
+  for (let t = 0.3; t < 1.9; t += 0.3) {
+    const p = rp.clone().addScaledVector(d, t * S).setY(0.15 * S);
+    const hits = city.sphere(p, 0.28 * S, []);
+    for (let j = 0; j < hits.length; j += 5) city.impact(hits[j], 260, V().set(d.x, -1, d.z).normalize(), 'crush');
+    cars.push(p, 0.3 * S, V().set(d.x * 20, 15, d.z * 20), 0.5);
+    dust.spawn(p, V().set(rnd(-6, 6), 2, rnd(-6, 6)), 8, 26, 6, 0.66, 0.5);
+  }
+  audio.play('rumble', rp, 1.4, 0.8, 150); audio.play('metal', rp, 1.3, 0.4, 150);
+  state.shake = Math.max(state.shake, 0.8);
+  msg('K.O.! Wygrałeś — następny robot za chwilę', 4);
+};
+// cios gracza w robota (dłoń albo trzymany przedmiot)
+function punchRobot(h, p, r, mass) {
+  if (!state.fight || !robot.active || !robot.alive || hitCool[h.i] > state.t) return;
+  const vp = h.vel.length() / S;
+  if (vp < 1.6) return;
+  for (const sp of robot.spheres(S)) {
+    if (p.distanceTo(sp.p) > sp.r + r) continue;
+    // garda robota: pięść przed głową przyjmuje cios
+    const guarded = robot.guard > 0 && sp.part !== 'belly';
+    const dmg = Math.min(24, 0.75 * vp * vp * mass);
+    const done = robot.hit(dmg, h.vel, sp.part, S);
+    hitCool[h.i] = state.t + 0.35;
+    stats.lastE = Math.round(done); stats.maxE = Math.max(stats.maxE, stats.lastE);
+    sparks(p, guarded ? 3 : 6 + Math.round(dmg / 4));
+    audio.play('metal', p, Math.min(1.4, 0.5 + dmg / 20), guarded ? 0.9 : 0.6 + Math.random() * 0.2, 60, 0.05);
+    if (!guarded && dmg > 10) audio.play('crash', p, 0.6, 1.4, 40, 0.1);
+    pulse(h, Math.min(1, 0.4 + dmg / 25), 60 + dmg * 3);
+    if (dmg > 14) state.shake = Math.max(state.shake, 0.3);
+    return;
+  }
+}
 function collisions(dt) {
   const sc = S;
   let hit = false;
   for (const h of hands) {
     const E = hitCity('h' + h.i, h.world, 0.075 * sc, h.vel, 'hand');
     if (E > 0) { hit = true; pulse(h, Math.min(1, 0.25 + E / 1500), 30 + Math.min(80, E / 20)); if (E > 400) state.shake = Math.max(state.shake, Math.min(0.6, E / 3000)); }
-    if (h.held) { const { sys, i } = h.held; const p = sys.pos(i); hitCity('held' + h.i, p, sys.s[i * 3] * 0.55, h.vel, 'held', Math.max(0.5, sys.mass[i])); }
+    if (h.held) { const { sys, i } = h.held; const p = sys.pos(i); hitCity('held' + h.i, p, sys.s[i * 3] * 0.55, h.vel, 'held', Math.max(0.5, sys.mass[i])); punchRobot(h, p, sys.s[i * 3] * 0.5, 1.4); }
+    else punchRobot(h, h.world, 0.075 * sc, 1);
   }
   // tułów (biodra i pierś): przepychanie się przez budynki
   const head = camera.position;
@@ -468,11 +589,11 @@ function collisions(dt) {
 }
 function updateHud(xr) {
   const st = city.stats();
-  wrist.draw({ pct: st.pct, down: st.down, total: st.total, lastE: stats.lastE, maxE: stats.maxE, breath: state.breathCool > 0 ? state.breathCool / 4 : 1 - state.breath, cool: state.breathCool > 0, size: SIZES[sizeI].name,
-    hints: xr ? ['Y/B: menu · A/X: ryk · chwyt: wyrwij / rzuć', 'klik prawej gałki: zamach ogonem'] : ['LPM/PPM (przytrzymaj = mocniej) · F oddech · R ryk', 'E chwyć/rzuć · T ogon · M zwolnij · Enter odbuduj'] });
+  wrist.draw({ pct: st.pct, down: st.down, total: st.total, lastE: stats.lastE, maxE: stats.maxE, breath: state.breathCool > 0 ? state.breathCool / 4 : 1 - state.breath, cool: state.breathCool > 0, size: SIZES[sizeI].name, fight: state.fight, php: Math.round(state.php), rhp: Math.round(robot.hp),
+    hints: xr ? ['Y/B: menu · A/X: ryk · chwyt: wyrwij / rzuć', 'klik prawej gałki: zamach ogonem'] : ['LPM/PPM (przytrzymaj = mocniej) · F oddech · R ryk', 'E chwyć/rzuć · T ogon · B robot · M zwolnij · Enter odbuduj'] });
   const dm = document.getElementById('msg'); dm.textContent = state.msgT > 0 ? state.msg : '';
   banner.mesh.visible = xr; banner.draw(state.msgT > 0 ? state.msg : '');
-  menu.draw({ size: SIZES[sizeI].name, slow: state.slow });
+  menu.draw({ size: SIZES[sizeI].name, slow: state.slow, fight: state.fight });
 }
 function updateMenuHover() {
   const r = hands.find((h) => h.hand === 'right' && h.source);
@@ -501,10 +622,13 @@ function step(dtReal) {
   if (tailSwing > 0) { tailSwing = Math.max(0, tailSwing - dtReal * 1.4); if (tailSwing === 0) tailDir = -tailDir; }
   kaiju.swing = Math.sin((1 - tailSwing) * Math.PI) * 1.5 * tailDir * (tailSwing > 0 ? 1 : 0);
   updateHands(dtReal, xr);
-  kaiju.update(dtReal, camera.position, bodyYaw + kaiju.swing * 0, walkSpeed, hands.map((h) => h.local), S);
+  kaiju.update(dtReal, camera.position, bodyYaw + kaiju.swing * 0, walkSpeed, [handOf(-1).local, handOf(1).local], S);     // lewa dłoń do lewego barku, prawa do prawego
   if (!menu.mesh.visible) collisions(dtReal);
   updateBreath(dtReal);
   state.roarCool = Math.max(0, state.roarCool - dtReal);
+  fightUpdate(dt);
+  state.hurt = Math.max(0, state.hurt - dtReal * 0.8);
+  vignette.material.opacity = Math.min(0.9, state.hurt + (state.fight && state.php < 30 ? 0.25 + 0.1 * Math.sin(state.t * 6) : 0));
   clusters.update(dt);
   frags.update(dt); cars.update(dt); dust.update(dt);
   city.update(dt, onDetach);
@@ -549,4 +673,4 @@ async function startXR() {
   b.disabled = !vr; if (!vr) note.textContent = 'Brak gogli VR — gra na komputerze (mysz + klawiatura).';
 })();
 
-window.__gz = { city, frags, cars, dust, clusters, kaiju, rig, camera, scene, THREE, hands, look, keys, punch, state, stats, step, roar, resetCity, hitCity, stomp, grab, release, setSize, get S() { return S; } };
+window.__gz = { robot, startFight, stopFight, punchRobot, city, frags, cars, dust, clusters, kaiju, rig, camera, scene, THREE, hands, look, keys, punch, state, stats, step, roar, resetCity, hitCity, stomp, grab, release, setSize, get S() { return S; } };

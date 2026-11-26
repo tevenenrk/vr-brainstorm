@@ -2,10 +2,10 @@ import * as THREE from 'three';
 
 // Ciało potwora w układzie rig-u (metry gracza; rig jest przeskalowany do rozmiaru potwora).
 // Układ ciała: x w prawo, y w górę, −z do przodu.
-const SKIN = new THREE.MeshLambertMaterial({ color: 0x34403a, flatShading: true });
-const SKIN2 = new THREE.MeshLambertMaterial({ color: 0x2a3430, flatShading: true });
+const SKIN = new THREE.MeshLambertMaterial({ color: 0x4a5c4e, flatShading: true });
+const SKIN2 = new THREE.MeshLambertMaterial({ color: 0x3a4a3e, flatShading: true });
 const BELLY = new THREE.MeshLambertMaterial({ color: 0x6a6650, flatShading: true });
-const CLAW = new THREE.MeshLambertMaterial({ color: 0xd8d0b8 });
+const CLAW = new THREE.MeshLambertMaterial({ color: 0xf0e8d0, emissive: 0x2a2620 });
 
 function plateShape(s) {
   const sh = new THREE.Shape();
@@ -43,11 +43,11 @@ export class Kaiju {
     const hips = new THREE.Mesh(bumpy(new THREE.SphereGeometry(0.25, 12, 8), 0.06, 4), SKIN); hips.position.set(0, 0.72, 0.24); hips.scale.set(1.05, 0.8, 1); B.add(hips);
     // nogi
     this.legs = [-1, 1].map((sd) => {
-      const thigh = new THREE.Mesh(bumpy(new THREE.CylinderGeometry(0.1, 0.13, 0.4, 10), 0.06, sd + 5), SKIN); B.add(thigh);
-      const shin = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.4, 10), SKIN); B.add(shin);
+      const thigh = new THREE.Mesh(bumpy(new THREE.CylinderGeometry(0.12, 0.16, 0.4, 10), 0.06, sd + 5), SKIN); B.add(thigh);
+      const shin = new THREE.Mesh(bumpy(new THREE.CylinderGeometry(0.1, 0.125, 0.4, 10), 0.05, sd + 7), SKIN); B.add(shin);
       const foot = new THREE.Group(); B.add(foot);
-      foot.add(new THREE.Mesh(bumpy(new THREE.BoxGeometry(0.17, 0.07, 0.24, 2, 1, 2), 0.1, sd), SKIN2).translateY(0.035));
-      for (let k = 0; k < 3; k++) foot.add(new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.06, 5).rotateX(-Math.PI / 2).translate(-0.05 + k * 0.05, 0.02, -0.14), CLAW));
+      foot.add(new THREE.Mesh(bumpy(new THREE.BoxGeometry(0.22, 0.09, 0.3, 2, 1, 2), 0.1, sd), SKIN2).translateY(0.045));
+      for (let k = 0; k < 3; k++) foot.add(new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.08, 5).rotateX(-Math.PI / 2).translate(-0.065 + k * 0.065, 0.025, -0.18), CLAW));
       return { sd, thigh, shin, foot, phase: sd > 0 ? Math.PI : 0, plant: new THREE.Vector3(), down: true };
     });
     // płyty grzbietowe (świecą przy ziejeniu)
@@ -68,8 +68,13 @@ export class Kaiju {
     }
     this.segLen = 0.15;
     // ramiona i dłonie
-    this.arms = [-1, 1].map((sd) => { const m = new THREE.Mesh(bumpy(new THREE.CylinderGeometry(0.045, 0.06, 1, 9).translate(0, 0.5, 0), 0.08, sd + 9), SKIN); rig.add(m); return m; });
-    this.hands = [-1, 1].map((sd) => { const h = clawHand(sd); rig.add(h); return h; });
+    this.arms = [-1, 1].map((sd) => {
+      const up = new THREE.Mesh(bumpy(new THREE.CylinderGeometry(0.055, 0.07, 1, 10).translate(0, 0.5, 0), 0.08, sd + 9), SKIN);
+      const lo = new THREE.Mesh(bumpy(new THREE.CylinderGeometry(0.045, 0.058, 1, 10).translate(0, 0.5, 0), 0.08, sd + 11), SKIN);
+      const el = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), SKIN2);
+      rig.add(up, lo, el); return { up, lo, el };
+    });
+    this.hands = [-1, 1].map((sd) => { const h = clawHand(sd); h.scale.setScalar(1.55); rig.add(h); return h; });
     // ziejący promień
     const bg = new THREE.CylinderGeometry(1, 1, 1, 14, 1, true).translate(0, 0.5, 0);
     this.beamOuter = new THREE.Mesh(bg, new THREE.MeshBasicMaterial({ color: 0x3a8cff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false }));
@@ -90,14 +95,14 @@ export class Kaiju {
     const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw)), right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
     for (const L of this.legs) {
       const ph = this.walkT * Math.PI + L.phase, sw = moving ? Math.sin(ph) : 0, lift = moving ? Math.max(0, Math.cos(ph)) * 0.09 : 0;
-      const base = new THREE.Vector3(head.x, 0, head.z).addScaledVector(right, L.sd * 0.15).addScaledVector(fwd, -0.12 + sw * 0.18);
+      const base = new THREE.Vector3(head.x, 0, head.z).addScaledVector(right, L.sd * 0.17).addScaledVector(fwd, 0.16 + sw * 0.2);
       base.y = lift;
       const down = lift < 0.005;
       if (down && !L.down && this.onStep) this.onStep(base.clone(), L.sd);
       L.down = down;
       L.foot.position.copy(base).applyMatrix4(B.matrix.clone().invert()); L.foot.rotation.y = 0;
       const hip = new THREE.Vector3(L.sd * 0.14, 0.76, 0.22), ankle = L.foot.position.clone().add(new THREE.Vector3(0, 0.07, 0.03));
-      const knee = hip.clone().lerp(ankle, 0.5).add(new THREE.Vector3(0, 0, -0.1));
+      const knee = hip.clone().lerp(ankle, 0.5).add(new THREE.Vector3(0, 0.02, -0.12));
       const seg = (m, a, b) => { m.position.copy(a).lerp(b, 0.5); m.scale.set(1, a.distanceTo(b) / 0.4, 1); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); };
       seg(L.thigh, hip, knee); seg(L.shin, knee, ankle);
       L.world = this.rig.localToWorld(base.clone());
@@ -129,7 +134,14 @@ export class Kaiju {
       const sd = i === 0 ? -1 : 1, sh = new THREE.Vector3(sd * 0.21, 1.33, 0.02).applyMatrix4(B.matrix);
       const h = handsL[i];
       const wr = h.pos.clone().add(new THREE.Vector3(0, 0, 0.06).applyQuaternion(h.q));
-      const m = this.arms[i]; m.position.copy(sh); m.scale.set(1, sh.distanceTo(wr), 1); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), wr.clone().sub(sh).normalize());
+      // łokieć: dwa odcinki po 0,3 m, staw odchylony w dół i na zewnątrz
+      const A = this.arms[i], d = sh.distanceTo(wr), L1 = 0.3, mid = sh.clone().lerp(wr, 0.5);
+      const bend = Math.sqrt(Math.max(0, L1 * L1 - (d / 2) ** 2));
+      const axis = wr.clone().sub(sh).normalize(), pole = new THREE.Vector3(sd * 0.5, -1, 0.3).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+      pole.sub(axis.clone().multiplyScalar(pole.dot(axis))).normalize();
+      const elbow = mid.addScaledVector(pole, bend);
+      const seg = (m, a, b) => { m.position.copy(a); m.scale.set(1, a.distanceTo(b), 1); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()); };
+      seg(A.up, sh, elbow); seg(A.lo, elbow, wr); A.el.position.copy(elbow);
       this.hands[i].position.copy(h.pos); this.hands[i].quaternion.copy(h.q);
     }
     this.plateMat.emissive.setRGB(0.1 * this.glow, 0.45 * this.glow, 1.2 * this.glow);
